@@ -146,7 +146,7 @@ class Data_NN:
         self.train_end_date = train_end_date
          
     def __repr__(self):
-        return f'The checkpoint name of this data is {self.checkpoint_name}, \nand data_dic keys are {list(self.data_dic.keys())}'
+        return f'\nThe checkpoint name of this data is {self.checkpoint_name}, \nand data_dic keys are {list(self.data_dic.keys())}'
     
     def set_directory(self, data_directory_path):
         #IN: note this directory_path should be where the data is at
@@ -183,16 +183,35 @@ class Data_NN:
             with open(f'./{checkpoint_name}/test_mkt.pkl','rb') as f:
                 test_mkt = pickle.load(f)
             
+            with open(f'./{checkpoint_name}/ticker_permno_dic.pkl','rb') as f:
+                ticker_permno_dic = pickle.load(f)
+            
+            with open(f'./{checkpoint_name}/permno_ticker_dic.pkl','rb') as f:
+                permno_ticker_dic = pickle.load(f)
+
             self.data_dic= {'data_useful_info_dic': data_useful_info_dic,
                     'sp500_used': sp500_used,
                     'mkt_daily':mkt_daily,
                     'train_sp500': train_sp500,
                     'test_sp500': test_sp500,
                     'train_mkt': train_mkt,
-                    'test_mkt': test_mkt}
+                    'test_mkt': test_mkt,
+                    'ticker_permno_dic': ticker_permno_dic,
+                    'permno_ticker_dic': permno_ticker_dic}
         
         else:
             self.prepare_data(self.start_date, checkpoint_name)
+            self.checkpoint_name = checkpoint_name
+
+            with open(f'./{checkpoint_name}/data_useful_info_dic.pkl','rb') as f:
+                data_useful_info_dic = pickle.load(f)
+            with open(f'./{checkpoint_name}/sp500_used.pkl','rb') as f:
+                sp500_used = pickle.load(f)
+            # Data at mkt level
+            with open(f'./{checkpoint_name}/mkt_daily.pkl','rb') as f:
+                mkt_daily = pickle.load(f)
+
+            # train/test split data
             with open(f'./{checkpoint_name}/train_sp500.pkl','rb') as f:
                 train_sp500 = pickle.load(f)
 
@@ -204,14 +223,22 @@ class Data_NN:
             
             with open(f'./{checkpoint_name}/test_mkt.pkl','rb') as f:
                 test_mkt = pickle.load(f)
+
+            with open(f'./{checkpoint_name}/ticker_permno_dic.pkl','rb') as f:
+                ticker_permno_dic = pickle.load(f)
             
+            with open(f'./{checkpoint_name}/permno_ticker_dic.pkl','rb') as f:
+                permno_ticker_dic = pickle.load(f)
+
             self.data_dic= {'data_useful_info_dic': data_useful_info_dic,
                     'sp500_used': sp500_used,
                     'mkt_daily':mkt_daily,
                     'train_sp500': train_sp500,
                     'test_sp500': test_sp500,
                     'train_mkt': train_mkt,
-                    'test_mkt': test_mkt}
+                    'test_mkt': test_mkt,
+                    'ticker_permno_dic': ticker_permno_dic,
+                    'permno_ticker_dic': permno_ticker_dic}
 
 
     def prepare_data(self, start_date, checkpoint_name):
@@ -234,6 +261,8 @@ class Data_NN:
                         excntry in ({','.join("'"+str(x)+"'" for x in cty_chosen)}) and eom>=CAST('{start_date}' AS DATE)
                 """
         char_data = wrds_db.raw_sql(sql_query)
+        char_data = char_data.apply(lambda x: x.astype(float) if x.dtype=='Float64' else x, axis=0)
+        #IN: added to make sure types are 'float64' instead of 'Float64'
 
         '''Download S&P500 constituents From CRSP and Compustat'''
         print ('Download S&P500 constituents From CRSP and Compustat..')
@@ -292,6 +321,8 @@ class Data_NN:
         # Then set link date bounds
         sp500_crsp_ccm = sp500_crsp_ccm.loc[(sp500_crsp_ccm['date']>=sp500_crsp_ccm['linkdt'])\
                                 &(sp500_crsp_ccm['date']<=sp500_crsp_ccm['linkenddt'])]
+        sp500_crsp_ccm = sp500_crsp_ccm.apply(lambda x: x.astype(float) if x.dtype=='Float64' else x, axis=0)
+        #IN: added to make sure types are 'float64' instead of 'Float64'
 
         '''Merge S&P500 Universe CRSP, Compustat Data with Firm Characteristic data'''
         print ('Merge S&P500 Universe CRSP, Compustat Data with Firm Characteristic data..')
@@ -445,6 +476,11 @@ class Data_NN:
         train_mkt = mkt_daily.loc[:self.train_end_date,:]
         test_mkt = mkt_daily.loc[self.train_end_date:,:]
 
+        '''make permno-ticker maps'''
+        multi_index = train_sp500.set_index(['ticker','permno']).index.unique()
+        ticker_permno_dic = {item[0]:item[1] for item in multi_index}
+        permno_ticker_dic = {item[1]:item[0] for item in multi_index}
+
         '''save data'''
         # Save this data locally for later use
         print ('Saving data..')
@@ -470,17 +506,23 @@ class Data_NN:
         with open(f'./{checkpoint_name}/mkt_daily.pkl','wb') as f:
             pickle.dump(mkt_daily, f)
 
-        with open(f'./data-used/{checkpoint_name}/train_sp500.pkl','wb') as f:
+        with open(f'./{checkpoint_name}/train_sp500.pkl','wb') as f:
             pickle.dump(train_sp500, f)
 
-        with open(f'./data-used/{checkpoint_name}/test_sp500.pkl','wb') as f:
+        with open(f'./{checkpoint_name}/test_sp500.pkl','wb') as f:
             pickle.dump(test_sp500, f)
 
-        with open(f'./data-used/{checkpoint_name}/train_mkt.pkl','wb') as f:
+        with open(f'./{checkpoint_name}/train_mkt.pkl','wb') as f:
             pickle.dump(train_mkt, f)
 
-        with open(f'./data-used/{checkpoint_name}/test_mkt.pkl','wb') as f:
+        with open(f'./{checkpoint_name}/test_mkt.pkl','wb') as f:
             pickle.dump(test_mkt, f)
+
+        with open(f'./{checkpoint_name}/ticker_permno_dic.pkl','wb') as f:
+            pickle.dump(ticker_permno_dic, f)
+
+        with open(f'./{checkpoint_name}/permno_ticker_dic.pkl','wb') as f:
+            pickle.dump(permno_ticker_dic, f)
 
 # %% [markdown]
 # ### Execution Main
