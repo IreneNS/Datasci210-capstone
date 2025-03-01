@@ -1,4 +1,3 @@
-
 import streamlit as st
 import random
 import pandas as pd
@@ -11,36 +10,7 @@ white = "#FFFFFF"
 
 st.set_page_config(page_title="AI Portfolio Optimizer", page_icon="📈", layout="wide")
 
-# Apply custom CSS for color theme, header, and padding
-st.markdown(f'''
-    <style>
-    /* Set Berkeley Blue as the background color */
-    .reportview-container {{
-        background-color: {white};
-    }}
-    .sidebar .sidebar-content {{
-        background-color: {berkeley_blue};
-    }}
-    /* Header styling */
-    .main-header {{
-        background-color: {berkeley_blue};
-        padding: 20px;
-        color: {california_gold};
-        text-align: center;
-        border-radius: 8px;
-    }}
-    .subheader {{
-        background-color: {berkeley_blue};
-        padding: 15px;
-        color: {white};
-        text-align: center;
-        border-radius: 8px;
-        font-size: 18px;
-    }}
-    </style>
-''', unsafe_allow_html=True)
-
-# Render the header and subheader
+# Apply custom CSS for header and subheader
 st.markdown(f"""
     <div class='header-container' style='background-color:{berkeley_blue}; padding:20px; border-radius:10px; text-align:center; margin-bottom:30px;'>
         <h1 style='color:{california_gold};'>📊 AI-Powered Portfolio Optimizer</h1>
@@ -48,68 +18,66 @@ st.markdown(f"""
     </div>
 """, unsafe_allow_html=True)
 
+# Input columns: Investment Universe, Risk Tolerance, Optimization Option
+cols = st.columns(3)
 
-# Initialize session state for tickers, weights, and sentiment
+# Column 1: Investment Universe
+with cols[0]:
+    ticker_options = ["AAPL", "TSLA", "AMZN", "GOOGL", "MSFT", "NFLX", "FB"]
+    st.subheader("Investment Universe")
+    selected_tickers = st.multiselect("Choose stocks from the universe", ticker_options)
+
+# Column 2: Risk Tolerance Slider
+with cols[1]:
+    st.subheader("Risk Tolerance (Annual Volatility)")
+    risk_tolerance = st.slider("Select your risk level (volatility)", 5, 30, 15)
+
+# Column 3: Optimization Option Dropdown
+with cols[2]:
+    st.subheader("Optimization Option")
+    optimization_options = ["Maximize Sharpe Ratio", "Minimize Risk"]
+    selected_optimization = st.selectbox("Choose an optimization objective", optimization_options)
+
+# Initialize session state for tickers and weights
 if "tickers" not in st.session_state:
     st.session_state["tickers"] = []
 if "weights" not in st.session_state:
     st.session_state["weights"] = {}
-if "sentiment" not in st.session_state:
-    st.session_state["sentiment"] = {}
 
-# Create a row with columns for investment universe, risk tolerance, stock tickers input, and optimization option
-cols = st.columns(4)
+# Process selected tickers
+if selected_tickers:
+    st.session_state["tickers"] = selected_tickers
+    st.session_state["weights"] = {t: st.session_state["weights"].get(t, 0) for t in selected_tickers}
 
-# Input: User-specified investment universe
-with cols[0]:
-    st.subheader("Investment Universe")
-    universe_options = ["Technology", "Healthcare", "Finance", "Energy", "Consumer Goods"]
-    selected_universe = st.selectbox("Choose a sector or asset class", universe_options)
+# Keep the header and inputs visible initially
+st.markdown("---")  # Optional divider for clarity
 
-# Input: User-specified risk tolerance (ex-ante volatility level)
-with cols[1]:
-    st.subheader("Risk Tolerance (Annual Volatility)")
-    risk_tolerance = st.slider("Select your risk level (volatility)", 5, 30, 10)
+# Add placeholders for charts that are rendered after inputs
+backtest_placeholder = st.empty()
+cumulative_placeholder = st.empty()
+weights_placeholder = st.empty()
 
-# Input: Stock tickers (within the selected universe)
-with cols[2]:
-    st.subheader("Stock Tickers")
-    tickers_input = st.text_input("Enter Tickers", placeholder="e.g., AAPL, TSLA, AMZN")
-
-# Input: Optimization option (dropdown)
-with cols[3]:
-    st.subheader("Optimization Option")
-    optimization_options = [
-        "Minimize Volatility",
-        "Maximize Sharpe Ratio",
-        "Maximize Return",
-        "Minimize Maximum Drawdown",
-        "Target Volatility",
-        "Equal Weighting"
-    ]
-    selected_optimization = st.selectbox("Choose an optimization objective", optimization_options)
-
-# Process tickers and reset weights if tickers change
-if tickers_input:
-    new_tickers = [t.strip().upper() for t in tickers_input.split(",") if t.strip()]
-    if set(new_tickers) != set(st.session_state["tickers"]):
-        st.session_state["weights"] = {t: st.session_state["weights"].get(t, 0) for t in new_tickers}
-    st.session_state["tickers"] = new_tickers
-
-# Show weights and market sentiment
-if st.session_state["tickers"]:
+# Specify Initial Weights and Sentiment and Pie Chart after cumulative chart
+if len(st.session_state["tickers"]) > 0:  # Only display when tickers are selected
+    # Specify Initial Weights and Sentiment
     st.subheader("Specify Initial Weights (%) and View Market Sentiment")
     columns = st.columns(len(st.session_state["tickers"]))
 
     for idx, ticker in enumerate(st.session_state["tickers"]):
         with columns[idx % len(columns)]:
-            st.session_state["weights"][ticker] = st.number_input(
+            # Use number_input without excessive re-renders
+            current_value = st.session_state["weights"].get(ticker, 0)
+            new_value = st.number_input(
                 f"{ticker} Weight (%)", min_value=0, max_value=100, 
-                value=st.session_state["weights"].get(ticker, 0), step=1,
+                value=current_value, step=1,
                 key=f"weight_{ticker}"
             )
-            # Placeholder for sentiment score (this will be integrated with the ML model)
-            st.session_state["sentiment"][ticker] = random.uniform(-1, 1)
+            # Only update state if there is an actual change in the value
+            if new_value != current_value:
+                st.session_state["weights"][ticker] = new_value
+
+            # Placeholder for sentiment score (randomized as a mock)
+            st.session_state["sentiment"] = {ticker: random.uniform(-1, 1) for ticker in st.session_state["tickers"]}
             st.metric(label=f"{ticker} Sentiment Score", value=round(st.session_state["sentiment"][ticker], 2))
 
     total_weight = sum(st.session_state["weights"].values())
@@ -119,20 +87,30 @@ if st.session_state["tickers"]:
     else:
         st.error(f"⚠️ Total Weight: {total_weight}% (Please balance to 100%)")
 
-    # Placeholder for portfolio suggestions based on model (can be connected to ML model later)
-    st.subheader("Proposed Trades Based on Optimized Portfolio")
-    proposed_weights = {t: random.uniform(5, 20) for t in st.session_state["tickers"]}  # Mock proposed weights
-
-    # Show proposed weights and difference
-    st.write(pd.DataFrame({
+    # Show Weights Pie Chart
+    st.subheader("Weights Distribution")
+    weights_data = pd.DataFrame({
         "Ticker": st.session_state["tickers"],
-        "Current Weight (%)": [st.session_state["weights"][t] for t in st.session_state["tickers"]],
-        "Proposed Weight (%)": [proposed_weights[t] for t in st.session_state["tickers"]],
-        "Weight Difference (%)": [proposed_weights[t] - st.session_state["weights"][t] for t in st.session_state["tickers"]]
-    }))
+        "Weight": [st.session_state["weights"][t] for t in st.session_state["tickers"]]
+    })
+    pie_chart_fig = px.pie(weights_data, names="Ticker", values="Weight", title="Portfolio Weights")
+    weights_placeholder.plotly_chart(pie_chart_fig)
 
-# Cumulative return chart (mock data)
-st.subheader("Cumulative Return Comparison")
+else:
+    st.write("Please select tickers to assign weights and view distribution.")
+
+# Now render the charts in the placeholders
+
+# Add Backtest Chart (Placeholder)
+backtest_data = {
+    "Date": pd.date_range(start="2021-01-01", periods=100, freq="D"),
+    "Backtest Performance": [random.uniform(80, 120) for _ in range(100)]
+}
+backtest_df = pd.DataFrame(backtest_data)
+backtest_fig = px.line(backtest_df, x="Date", y="Backtest Performance", title="Backtest Performance Over Time")
+backtest_placeholder.plotly_chart(backtest_fig)
+
+# Add Cumulative Return Chart
 data = {
     "Date": pd.date_range(start="2022-01-01", periods=100, freq="D"),
     "Optimized Portfolio": [random.uniform(90, 110) for _ in range(100)],
@@ -140,12 +118,10 @@ data = {
 }
 df = pd.DataFrame(data)
 fig = px.line(df, x="Date", y=["Optimized Portfolio", "Benchmark Portfolio"], title="Cumulative Returns")
-st.plotly_chart(fig)
+cumulative_placeholder.plotly_chart(fig)
 
 # Add footer manually with Streamlit's markdown component
-st.markdown(f"""
-    <div style='background-color:{berkeley_blue}; padding:10px; color:{california_gold}; text-align:left; border-radius:10px;'>
-        © MIDS 2025
-    </div>
-""", unsafe_allow_html=True)
-
+st.markdown(
+    f"<div style='background-color:{berkeley_blue}; padding:10px; color:{california_gold}; text-align:right;'>MIDS 2025</div>",
+    unsafe_allow_html=True
+)
