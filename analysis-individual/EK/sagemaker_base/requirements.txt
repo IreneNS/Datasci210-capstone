@@ -1,0 +1,7 @@
+transformers==4.17.0
+datasets
+torch
+scikit-learn
+pandas
+numpy
+tqdm
