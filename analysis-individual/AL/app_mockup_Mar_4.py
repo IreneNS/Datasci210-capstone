@@ -88,7 +88,7 @@ if len(st.session_state["tickers"]) > 0:
         "Weight": [st.session_state["weights"][t] for t in st.session_state["tickers"]]
     })
     pie_chart_fig = px.pie(weights_data, names="Ticker", values="Weight", title="Portfolio Weights")
-    st.plotly_chart(pie_chart_fig)
+    st.plotly_chart(pie_chart_fig, use_container_width=True)  # Full-width pie chart
 
     # Add Backtest Chart
     backtest_placeholder = st.empty()
@@ -98,7 +98,7 @@ if len(st.session_state["tickers"]) > 0:
     }
     backtest_df = pd.DataFrame(backtest_data)
     backtest_fig = px.line(backtest_df, x="Date", y="Backtest Performance", title="Backtest Performance Over Time")
-    backtest_placeholder.plotly_chart(backtest_fig)
+    backtest_placeholder.plotly_chart(backtest_fig, use_container_width=True)  # Full-width backtest chart
 
     # Add Cumulative Return Chart
     cumulative_placeholder = st.empty()
@@ -109,14 +109,14 @@ if len(st.session_state["tickers"]) > 0:
     }
     df = pd.DataFrame(data)
     cumulative_fig = px.line(df, x="Date", y=["Optimized Portfolio", "Benchmark Portfolio"], title="Cumulative Returns")
-    cumulative_placeholder.plotly_chart(cumulative_fig)
+    cumulative_placeholder.plotly_chart(cumulative_fig, use_container_width=True)  # Full-width cumulative chart
 
     # -------------------- SENTIMENT INSIGHTS -------------------- #
     st.markdown("---")
     st.subheader("Sentiment Insights 📰")
 
-    # Arrange sentiment breakdown and next-day return in side-by-side columns with better spacing
-    sentiment_col, return_col = st.columns([2, 1], gap="large")  # Wider left column, increased spacing
+    # Arrange sentiment breakdown and next-day return in side-by-side columns (equal width)
+    sentiment_col, return_col = st.columns([1, 1], gap="large")  # Equal column width
 
     # Mock FinBERT sentiment probabilities
     finbert_sentiment_probs = {
@@ -180,11 +180,14 @@ if len(st.session_state["tickers"]) > 0:
     next_day_return_prob = round(random.uniform(0, 1), 2)
 
     with return_col:
-        st.write(f"**📈 Probability of Positive Next-Day Return: {next_day_return_prob * 100:.1f}%**")
+        # Center text and progress bar
+        st.markdown(f"""
+            <div style="text-align: center;">
+                <h3>📈 Probability of Positive Next-Day Return: <b>{next_day_return_prob * 100:.1f}%</b></h3>
+            </div>
+        """, unsafe_allow_html=True)
 
-
-        # Display progress bar with proper spacing
-        st.markdown("<br>", unsafe_allow_html=True)  # Add spacing
+        # Display progress bar
         st.progress(next_day_return_prob)
 
 
