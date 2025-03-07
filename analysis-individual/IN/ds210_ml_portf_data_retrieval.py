@@ -434,7 +434,7 @@ class Data_NN:
         print ('Retrieve market level data..')
         print ('Retrieve S&P data..')
         # Download S&P 500 historical data
-        sp500_mkt = yf.download('^GSPC', start='1990-01-01', end='2024-12-31')
+        sp500_mkt = yf.download('^GSPC', start='1990-01-01', end='2025-01-01')
         sp500_mkt = sp500_mkt.droplevel(1, axis=1)
         sp500_mkt.index = pd.to_datetime(sp500_mkt.index) #IN: to make sure it's datetime index
 
@@ -445,7 +445,7 @@ class Data_NN:
         print('Retrieve Treasury data..')
         # Treasury data
         start_date_tsy = '2000-01-01'
-        end_time_tsy = '2023-01-01'
+        end_time_tsy = '2025-01-01'
 
         tickers = {
             "tsy10yr": "^TNX",
