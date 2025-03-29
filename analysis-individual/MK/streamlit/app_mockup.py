@@ -7,7 +7,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 import base64
 
-from fetch_benchmark import fetch_benchmark_data
+from fetch_api import fetch_benchmark_data, fetch_model_data
 from parse_utils import parse_api_data, convert_to_dataframe, convert_to_weight_dataframe
 
 
