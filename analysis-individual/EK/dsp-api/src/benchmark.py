@@ -186,10 +186,10 @@ def portfolio_performance(input_df, weight_df, portf_name, rebal_freq, mkt_df,
     if plot_show is True: #IN mod
         print(stats_df)
     
-    portf_rtn = portf_rtn.reset_index()
-    portf_mkt_rtn = portf_mkt_rtn.reset_index()  
-    stats_df = stats_df.reset_index()
-    scaler_df = scaler_df.reset_index()  
+    # portf_rtn = portf_rtn.reset_index()
+    # portf_mkt_rtn = portf_mkt_rtn.reset_index()  
+    # stats_df = stats_df.reset_index()
+    # scaler_df = scaler_df.reset_index()  
 
     return portf_rtn, portf_mkt_rtn, stats_df, scaler_df, object_name
 
@@ -620,7 +620,7 @@ class Benchmark_model_DL:
         
         # convert column names to ticker # IN mod2
         permno_ticker_dic = self.input_data_obj.data_dic['permno_ticker_dic']
-        scaled_weight_df = weight_df.multiply(scaler_df.iloc[:,1].reset_index(drop=True), axis=0).rename(columns=permno_ticker_dic)
+        scaled_weight_df = weight_df.multiply(scaler_df, axis=0).rename(columns=permno_ticker_dic)
 
         # combine columns with the same name - given the same ticker may have different permno over time
         scaled_weight_df = scaled_weight_df.T.groupby(by=scaled_weight_df.columns).sum().T
@@ -645,7 +645,7 @@ class Benchmark_model_DL:
 def benchmark_run_test(data_directory, data_checkpoint_name, start_date, train_end_date,
                          model_directory, model_checkpoint_name,
                          ticker_list, rebal_freq, opt_flag, last_win_only=False, 
-                         target_risk=0.2, force_retrain=False, force_take_new_data=True, verbose=True): #IN_mod
+                         target_risk=0.2, force_retrain=True, force_take_new_data=True, verbose=True): #IN_mod
 
     data_obj = data_unit.data_main(data_directory, data_checkpoint_name, start_date, train_end_date, verbose=False)
 
@@ -724,4 +724,3 @@ def benchmark_run_test(data_directory, data_checkpoint_name, start_date, train_e
     print('test', bm_model_obj.test_used)         
 
     return bm_model_obj, test_reg_param_df, test_exp_exc_rtn_df, test_opt_weight_df
-
