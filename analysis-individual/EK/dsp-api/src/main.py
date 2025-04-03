@@ -1,6 +1,6 @@
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, validator, ValidationError, confloat
 import logging
 from typing import Optional, List, Any, Dict
 from fastapi import FastAPI, Query
@@ -103,21 +103,47 @@ async def lifespan_mechanism(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan_mechanism)
 
+allow_tickers = {"top_100_ticker_l", "top_200_ticker_l", "top_300_ticker_l"}
+
+
 class BenchmarkRequest(BaseModel):
     model_config = ConfigDict(extra='forbid')
     ticker_list: Optional[list[str]] = []
     rebal_freq: str = "D"
     opt_flag: str = "max_sharpe"
-    target_risk: float = 0.2
+    target_risk: confloat(ge=0.01, le=0.99) = 0.2
     last_win_only: bool = True
+
+    @validator('ticker_list', pre=True)
+    def check_ticker_list(cls, v):
+        # Check if ticker_list is either empty or contains exactly one item
+        if len(v) > 1:
+            raise ValueError("ticker_list should contain exactly one element or be empty.")
+        # If ticker_list is not empty, ensure each ticker starts with allowed prefixes
+        if v:
+            ticker = v[0]
+            if not any(ticker.startswith(prefix) for prefix in allow_tickers):
+                raise ValueError(f"Invalid ticker: {ticker}. Must be one of {allow_tickers}")
+        return v
 
 class ModelRequest(BaseModel):
     model_config = ConfigDict(extra='forbid')
     ticker_list: Optional[list[str]] = []
     rebal_freq: str = "D"
     opt_flag: str = "max_sharpe"
-    target_risk: float = 0.2
+    target_risk: confloat(ge=0.01, le=0.99) = 0.2
     last_win_only: bool = True
+    @validator('ticker_list', pre=True)
+    def check_ticker_list(cls, v):
+        # Check if ticker_list is either empty or contains exactly one item
+        if len(v) > 1:
+            raise ValueError("ticker_list should contain exactly one element or be empty.")
+        # If ticker_list is not empty, ensure each ticker starts with allowed prefixes
+        if v:
+            ticker = v[0]
+            if not any(ticker.startswith(prefix) for prefix in allow_tickers):
+                raise ValueError(f"Invalid ticker: {ticker}. Must be one of {allow_tickers}")
+        return v
     
 
 @app.get("/health")
@@ -175,7 +201,7 @@ async def benchmark_model(benchmark_request: BenchmarkRequest):
         benchmark_run_test(data_directory, data_checkpoint_name, start_date, train_end_date,
                             model_directory, model_checkpoint_name,
                             ticker_list, rebal_freq, opt_flag, last_win_only=last_win_only, 
-                            target_risk=target_risk, force_retrain=False,verbose=True)
+                            target_risk=target_risk, force_retrain=True,verbose=True)
 
     # evaluate the test model
     portf_rtn_test, portf_mkt_rtn_test, stats_df_test, scaler_df_test, fig_perf_test, scaled_weight_df_test = \
