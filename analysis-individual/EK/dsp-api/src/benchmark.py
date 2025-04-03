@@ -5,7 +5,6 @@ import os
 import matplotlib.pyplot as plt
 import pickle
 import seaborn as sns
-import os 
 import importlib
 from statsmodels.regression.rolling import RollingOLS
 import statsmodels.api as sm
@@ -14,7 +13,6 @@ from pypfopt import (
     EfficientFrontier, 
     risk_models,
     plotting,
-    # fix_nonpositive_semidefinite
 )
 import cvxpy as cp
 import warnings
@@ -22,14 +20,20 @@ warnings.filterwarnings('once')
 from sklearn.covariance import LedoitWolf
 from joblib import Parallel, delayed
 import time
-import os
 print(os.getcwd())
 print(os.listdir())
 import src.ds210_ml_portf_data_retrieval as data_unit
 import openpyxl
+import boto3
+from datetime import datetime
+from io import BytesIO
+import gc
 # import importlib
 # importlib.reload(data_unit)
 
+s3 = boto3.client('s3')
+
+bucket_name = "dsp-public-streamlit"
 
 def rolling_regression_sm(df_y, df_x, rolling_window, min_nobs):
     # note: the input in sm needs to be either np array or pd series, either works under sm regression
@@ -136,6 +140,7 @@ def portfolio_performance(input_df, weight_df, portf_name, rebal_freq, mkt_df,
     portf_mkt_rtn.cumsum().plot(ax=ax1[0])
     ax1[0].set_title(f'Cumulative Return Comparison')
     ax1[0].legend(loc='upper left')
+    ax1[0].set_ylabel('Cumulative Return')
     # plt.legend()
     # plt.show()
 
@@ -149,11 +154,26 @@ def portfolio_performance(input_df, weight_df, portf_name, rebal_freq, mkt_df,
         ax=ax1[1],
         title='Rolling Annual Vol Comparison')
         ax1[1].legend(loc='upper left')
+    ax1[1].set_ylabel('Rolling Annual Vol')
 
     fig1.suptitle(f'{portf_name} vs (Scaled) S&P500 Cumulative Return and Rolling Vol Comparison')
     plt.subplots_adjust(top=0.85, bottom=0.01, wspace=0.2)
     if plot_show is True: #IN mod
         plt.show()
+
+    svg_buffer = BytesIO()
+    fig1.savefig(svg_buffer, format="svg")
+    svg_buffer.seek(0)  # Reset buffer position
+
+    # Save figure as Pickle to an in-memory buffer
+    pickle_buffer = BytesIO()
+    pickle.dump(fig1, pickle_buffer)
+    pickle_buffer.seek(0)
+
+    object_name = f'benchmark_portf_{rebal_freq}_{datetime.now().strftime("%Y%m%d_%H%M%S")}'
+    s3.upload_fileobj(svg_buffer, bucket_name, f'outputs/{object_name}.svg')
+    s3.upload_fileobj(pickle_buffer, bucket_name, f'outputs/{object_name}.pkl')
+
     plt.close()
 
     stats_df = pd.DataFrame(columns=portf_mkt_rtn.columns)
@@ -171,7 +191,7 @@ def portfolio_performance(input_df, weight_df, portf_name, rebal_freq, mkt_df,
     stats_df = stats_df.reset_index()
     scaler_df = scaler_df.reset_index()  
 
-    return portf_rtn, portf_mkt_rtn, stats_df, scaler_df, fig1
+    return portf_rtn, portf_mkt_rtn, stats_df, scaler_df, object_name
 
 def check_weights_plots(opt_weight_df):
     # check basic properties for optimization weights:
@@ -228,7 +248,7 @@ class Benchmark_model_DL:
 
     def load_model(self, checkpoint_name):
         if self.check_checkpoint_model(checkpoint_name): ## CHECK TO DO
-            with open(f'https://dsp-public-streamlit.s3.us-west-2.amazonaws.com/NN-related/{checkpoint_name}/bm_model_obj_{self.rebal_freq}.pkl', 'rb') as f:
+            with open(f'./{checkpoint_name}/bm_model_obj_{self.rebal_freq}.pkl', 'rb') as f:
                 try:
                     bm_model_obj = pickle.load(f)
                 except AttributeError:
@@ -600,13 +620,15 @@ class Benchmark_model_DL:
         
         # convert column names to ticker # IN mod2
         permno_ticker_dic = self.input_data_obj.data_dic['permno_ticker_dic']
-        scaled_weight_df = weight_df.multiply(scaler_df, axis=0).rename(columns=permno_ticker_dic)
+        scaled_weight_df = weight_df.multiply(scaler_df.iloc[:,1].reset_index(drop=True), axis=0).rename(columns=permno_ticker_dic)
 
         # combine columns with the same name - given the same ticker may have different permno over time
         scaled_weight_df = scaled_weight_df.T.groupby(by=scaled_weight_df.columns).sum().T
+
+        gc.collect()
         
         return portf_rtn, portf_mkt_rtn, stats_df, scaler_df, \
-            fig_perf, weight_df.multiply(scaler_df.iloc[1], axis=0)
+            fig_perf, scaled_weight_df
     
     def save_model_obj(self, directory, checkpoint_name):        
         '''save data'''
