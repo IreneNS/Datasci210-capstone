@@ -1,0 +1,14 @@
+name: dsp_streamlit
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.11  # or any preferred Python version
+  - streamlit
+  - pandas=2.2.3
+  - numpy
+  - plotly
+  - matplotlib=3.10.1
+  - requests
+  - jsonschema
+  - pip
