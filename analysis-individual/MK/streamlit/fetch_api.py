@@ -4,56 +4,67 @@ import pandas as pd
 # import matplotlib.pyplot as plt
 from io import BytesIO
 import pickle
-
+import json
 
 
 # -------------------- CALL AWS BENCHMARK API -------------------- #
 def fetch_benchmark_data(tickers, freq, opt_flag, risk, win):
     url = st.secrets["api"]["url_1"]  # Fetch URL from secrets.toml
 
+    headers = {
+        "Content-Type": "application/json"
+    }
+
     payload = {
         "ticker_list": tickers,
         "rebal_freq": freq,
         "opt_flag": opt_flag,
-        "target_risk": risk / 100,  # Convert percentage to decimal
+        "target_risk": risk,  # Convert percentage to decimal
         "last_win_only": win
     }
     
-    return make_api_request(url, payload)
+    return make_api_request(url, headers, payload)
 
 # -------------------- CALL SECOND API (URL_2) -------------------- #
 def fetch_model_data(tickers, freq, opt_flag, risk, win):
     url = st.secrets["api"]["url_2"]  # Fetch the second URL from secrets.toml
 
+    headers = {
+        "Content-Type": "application/json"
+    }
+
     payload = {
         "ticker_list": tickers,
         "rebal_freq": freq,
         "opt_flag": opt_flag,
-        "target_risk": risk / 100,  # Convert percentage to decimal
+        "target_risk": risk,  # Convert percentage to decimal
         "last_win_only": win
     }
     
-    return make_api_request(url, payload)
+    return make_api_request(url, headers, payload)
 
 # -------------------- GENERIC API REQUEST FUNCTION -------------------- #
-def make_api_request(url, payload):
+def make_api_request(url, headers, payload):
     """Handles API requests and error handling, including fetching data from URLs."""
     try:
-        # Step 1: Send POST request to API
-        response = requests.post(url, json=payload)
+        # st.write("Sending payload to API:", json.dumps(payload, indent=2)) #del
+
+        # Send POST request to API
+        response = requests.post(url, headers=headers, data=json.dumps(payload))
         response.raise_for_status()  # Raise an HTTPError if the response code is 4xx/5xx
         
         if response.status_code == 200:
             try:
-                # Step 2: Check if the response is a URL or JSON data
+                # Check if the response is a URL or JSON data
                 response_json = response.json()
+                # st.write(response_json)
 
                 # Check if the response contains a URL to fetch JSON data from
                 if isinstance(response_json, str) and response_json.startswith('http'):
-                    # Step 3: If the response is a URL (string), fetch the JSON from the URL
+                    # If the response is a URL (string), fetch the JSON from the URL
                     return fetch_json_from_url(response_json)
                 else:
-                    # Step 4: Otherwise, return the JSON response directly
+                    # Return the JSON response directly
                     return response_json
 
             except ValueError as e:
@@ -65,6 +76,8 @@ def make_api_request(url, payload):
 
     except requests.exceptions.RequestException as e:
         st.error(f"Request for API failed: {e}")
+        if e.response is not None:
+            st.error(f"Response content: {e.response.text}")
         return None
 
 def fetch_json_from_url(url):
@@ -179,3 +192,4 @@ def fetch_s3_data(data_type="tickers", stock_count = None):
     except Exception as e:
         st.error(f"Error fetching data from {s3_url}: {e}")
         return None
+        
