@@ -66,14 +66,21 @@ if tickers_df is not None:
     selected_tickers = st.sidebar.multiselect(f"Choose stocks from the Top {selected_stock_count} list:", tickers_df)
     st.write(selected_tickers)
 
+if selected_tickers == 200:
+    ticker_list = ['top_200_ticker_l']
+elif selected_tickers == 300:
+    ticker_list = ['top_300_ticker_l']
+else:
+    ticker_list = ['top_100_ticker_l']
+
 risk_tolerance = st.sidebar.slider(
     "Risk Tolerance (Annual Volatility)", 
     0.01, 0.99, 0.2, 
     help="Select a risk tolerance between 0 and 1."
 )
 
-# benchmark_data = fetch_benchmark_data(selected_tickers, "D", "max_sharpe", risk_tolerance, True)
-model_data = fetch_model_data(selected_tickers, "D", "max_sharpe", risk_tolerance, True)
+benchmark_data = fetch_benchmark_data(ticker_list, "D", "max_sharpe", risk_tolerance, False)
+model_data = fetch_model_data(ticker_list, "D", "max_sharpe", risk_tolerance, False)
 
 fetching_message = st.empty()
 
