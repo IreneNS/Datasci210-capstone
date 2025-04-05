@@ -168,9 +168,9 @@ def portfolio_performance(input_df, weight_df, portf_name, rebal_freq, mkt_df,
     pickle.dump(fig1, pickle_buffer)
     pickle_buffer.seek(0)
 
-    object_name = f'outputs/portf_{rebal_freq}_{datetime.now().strftime("%Y%m%d_%H%M%S")}'
-    s3.upload_fileobj(svg_buffer, bucket_name, f'{object_name}.svg')
-    s3.upload_fileobj(pickle_buffer, bucket_name, f'{object_name}.pkl')
+    object_name = f'portf_{rebal_freq}_{datetime.now().strftime("%Y%m%d_%H%M%S")}'
+    s3.upload_fileobj(svg_buffer, bucket_name, f'outputs/{object_name}.svg')
+    s3.upload_fileobj(pickle_buffer, bucket_name, f'outputs/{object_name}.pkl')
 
     plt.close()
 
@@ -232,9 +232,9 @@ def performance_comparison_all_recal(portf_rtn_df_l, mkt_rtn,\
     pickle.dump(fig1, pickle_buffer)
     pickle_buffer.seek(0)
 
-    object_name = f'outputs/portf_{rebal_freq}_{datetime.now().strftime("%Y%m%d_%H%M%S")}'
-    s3.upload_fileobj(svg_buffer, bucket_name, f'{object_name}.svg')
-    s3.upload_fileobj(pickle_buffer, bucket_name, f'{object_name}.pkl')
+    object_name = f'portf_{rebal_freq}_{datetime.now().strftime("%Y%m%d_%H%M%S")}'
+    s3.upload_fileobj(svg_buffer, bucket_name, f'outputs/{object_name}.svg')
+    s3.upload_fileobj(pickle_buffer, bucket_name, f'outputs/{object_name}.pkl')
 
     plt.close()
 
