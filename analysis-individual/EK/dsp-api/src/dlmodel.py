@@ -633,6 +633,9 @@ def run_dl_for_interface(period, last_win_only, ticker_list, scaling_vol_tgt, ve
         portfolio_performance(rolling_ana_data_used, opt_weight_df, 'Daily-DeepLearning', 'D', mkt_data_used, \
                         last_win_only=last_win_only, vol_scaler_flag=True, scaling_vol_tgt=0.2, plot_show=False)
 
+    print(scaler_df.dtypes)
+    print(scaler_df)
+    print(opt_weight_df.dtypes)
     scaled_weight_df = opt_weight_df.multiply(scaler_df, axis=0).rename(columns=permno_ticker_dic)
     
     # combine columns with the same name - given the same ticker may have different permno over time

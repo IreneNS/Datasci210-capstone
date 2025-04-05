@@ -1,6 +1,6 @@
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, ConfigDict, validator, ValidationError, confloat
+from pydantic import BaseModel, ConfigDict, validator,field_validator,ValidationError, confloat
 import logging
 from typing import Optional, List, Any, Dict
 from fastapi import FastAPI, Query
@@ -114,7 +114,7 @@ class BenchmarkRequest(BaseModel):
     target_risk: confloat(ge=0.01, le=0.99) = 0.2
     last_win_only: bool = True
 
-    @validator('ticker_list', pre=True)
+    @field_validator('ticker_list', mode='before')
     def check_ticker_list(cls, v):
         # Check if ticker_list is either empty or contains exactly one item
         if len(v) > 1:
@@ -133,7 +133,7 @@ class ModelRequest(BaseModel):
     opt_flag: str = "max_sharpe"
     target_risk: confloat(ge=0.01, le=0.99) = 0.2
     last_win_only: bool = True
-    @validator('ticker_list', pre=True)
+    @field_validator('ticker_list', mode='before')
     def check_ticker_list(cls, v):
         # Check if ticker_list is either empty or contains exactly one item
         if len(v) > 1:
@@ -167,15 +167,16 @@ async def benchmark_model(benchmark_request: BenchmarkRequest):
     run the model
     '''
     logger.info("start benchmark model")
-    tickers = ''
 
+    # make key for db
     if len(benchmark_request.ticker_list) > 0:
-        tickers=benchmark_request.ticker_list[0]
-    else:
-        tickers=''
+        key = f'bm_portf_{benchmark_request.ticker_list[0]}_{benchmark_request.target_risk}_{benchmark_request.last_win_only}'
+        ticker_list = get_s3_pickle(f'data-used/{benchmark_request.ticker_list[0]}.pkl') #top_100_ticker_l, top_200_ticker_l, top_300_ticker_l, []
+    else: 
+        key = f'bm_portf_all_{benchmark_request.target_risk}_{benchmark_request.last_win_only}'
+        ticker_list = []
 
-    key = f'benchmark_portf_{tickers}_{benchmark_request.target_risk}_{benchmark_request.last_win_only}'
-
+    # check db
     db_result = get_cached_result(key)
     if db_result is not None:
         return db_result
@@ -183,18 +184,15 @@ async def benchmark_model(benchmark_request: BenchmarkRequest):
     current_directory = os.path.dirname(os.path.abspath(__file__))
     data_directory = os.path.join(current_directory, 'dependencies/benchmark_model')
     model_directory = os.path.join(current_directory, 'dependencies/benchmark_model')
-    # data_directory = r'./dependencies/'
     data_checkpoint_name = 'data_checkpoint4'
     start_date = '2000-01-01'
     train_end_date = '2023-12-31'
 
     model_checkpoint_name = 'bm_model_checkpoint2'
-    ticker_list = benchmark_request.ticker_list
     rebal_freq = benchmark_request.rebal_freq  # 'D','W','M'
     opt_flag = benchmark_request.opt_flag #'max_sharpe','target_risk'
     target_risk = benchmark_request.target_risk
     last_win_only = benchmark_request.last_win_only
-    force_retrain=False
 
     ## test model - benchmark model
     bm_model_obj, test_reg_param_df, test_exp_exc_rtn_df, test_opt_weight_df=\
@@ -207,15 +205,15 @@ async def benchmark_model(benchmark_request: BenchmarkRequest):
     portf_rtn_test, portf_mkt_rtn_test, stats_df_test, scaler_df_test, fig_perf_test, scaled_weight_df_test = \
         bm_model_obj.eval('test', opt_flag, last_win_only, vol_scaler_flag=False, scaling_vol_tgt=0.2, plot_show=False)
 
-    # test_reg_param_df = test_reg_param_df.replace([np.inf, -np.inf], None).replace(np.nan, None)
-    # test_exp_exc_rtn_df = test_exp_exc_rtn_df.replace([np.inf, -np.inf], None).replace(np.nan, None)
-    # test_opt_weight_df = test_opt_weight_df.replace([np.inf, -np.inf], None).replace(np.nan, None)
 
+    # clean nans
     portf_rtn_test = portf_rtn_test.replace([np.inf, -np.inf], None).replace(np.nan, None)
     portf_mkt_rtn_test = portf_mkt_rtn_test.replace([np.inf, -np.inf], None).replace(np.nan, None)
     stats_df_test = stats_df_test.replace([np.inf, -np.inf], None).replace(np.nan, None)
     scaler_df_test = scaler_df_test.replace([np.inf, -np.inf], None).replace(np.nan, None)
     scaled_weight_df_test = scaled_weight_df_test.replace([np.inf, -np.inf], None).replace(np.nan, None)
+
+    # prepare dfs
     if not isinstance(portf_rtn_test, pd.DataFrame):
         portf_rtn_test = portf_rtn_test.to_frame()
     if not isinstance(portf_mkt_rtn_test, pd.DataFrame):
@@ -223,21 +221,21 @@ async def benchmark_model(benchmark_request: BenchmarkRequest):
     if not isinstance(stats_df_test, pd.DataFrame):
         stats_df_test = stats_df_test.to_frame()
     if not isinstance(scaler_df_test, pd.DataFrame):
-        stats_df_test = scaler_df_test.to_frame()
+        scaler_df_test = scaler_df_test.to_frame()
     if not isinstance(scaled_weight_df_test, pd.DataFrame):
-        stats_df_test = scaled_weight_df_test.to_frame()
-
-    # Convert DataFrame to dict for JSONResponse
+        scaled_weight_df_test = scaled_weight_df_test.to_frame()
+        
+    # df to dict for json
     return_data = {
-        # 'test_reg_param_df': test_reg_param_df.to_dict(orient='records'),
         'portf_rtn_test': json.loads(portf_rtn_test.to_json(orient="records")),
         'portf_mkt_rtn_test': json.loads(portf_mkt_rtn_test.to_json(orient="records")),
         'stats_df_test': json.loads(stats_df_test.to_json(orient="records")),
-        'scaler_df_test': json.loads(scaler_df_test.to_json(orient="records")),
-        'scaled_weight_df_test':json.loads(scaled_weight_df_test.to_json(orient="records")),
+        'scaler_df_test': json.loads(scaler_df_test.reset_index().to_json(orient="records")), # reset index for date
+        'scaled_weight_df_test':json.loads(scaled_weight_df_test.reset_index().to_json(orient="records")), # reset index for date
         'figure_name':fig_perf_test
     }
 
+    # fill db
     s3_path = upload_json_to_s3(key, return_data)
     link = store_result(key, s3_path)
 
@@ -249,30 +247,36 @@ async def dl_model(model_request: ModelRequest):
     '''
     run the dl model
     '''
-    key = f'dl_portf_{model_request.ticker_list[0]}_{model_request.target_risk}_{model_request.last_win_only}'
 
+    # make key
+    if len(model_request.ticker_list) > 0:
+        key = f'dl_portf_{model_request.ticker_list[0]}_{model_request.target_risk}_{model_request.last_win_only}'
+        ticker_list = get_s3_pickle(f'data-used/{model_request.ticker_list[0]}.pkl') #top_100_ticker_l, top_200_ticker_l, top_300_ticker_l, []
+    else: 
+        key = f'dl_portf_all_{model_request.target_risk}_{model_request.last_win_only}'
+        ticker_list = []
+
+    # check db
     db_result = get_cached_result(key)
     if db_result is not None:
         return db_result
 
-
-    last_win_only= model_request.last_win_only # change later
-    if len(model_request.ticker_list) > 0:
-        ticker_list = get_s3_pickle(f'data-used/{model_request.ticker_list[0]}.pkl') #top_100_ticker_l, top_200_ticker_l, top_300_ticker_l, []
-    else: 
-        ticker_list = []
+    last_win_only= model_request.last_win_only 
     period = 'test' # train_val, train_val_test, test
     scaling_vol_tgt = model_request.target_risk
 
+    # run model
     portf_rtn, portf_mkt_rtn, stats_df, scaler_df, fig_perf, scaled_weight_df = \
         run_dl_for_interface(period, last_win_only, ticker_list, scaling_vol_tgt, verbose=True)
 
+    # clean nans
     portf_rtn = portf_rtn.replace([np.inf, -np.inf], None).replace(np.nan, None)
     portf_mkt_rtn = portf_mkt_rtn.replace([np.inf, -np.inf], None).replace(np.nan, None)
     stats_df = stats_df.replace([np.inf, -np.inf], None).replace(np.nan, None)
     scaler_df = scaler_df.replace([np.inf, -np.inf], None).replace(np.nan, None)
     scaled_weight_df = scaled_weight_df.replace([np.inf, -np.inf], None).replace(np.nan, None)
 
+    # create dfs
     if not isinstance(portf_rtn, pd.DataFrame):
         portf_rtn = portf_rtn.to_frame()
     if not isinstance(portf_mkt_rtn, pd.DataFrame):
@@ -283,28 +287,18 @@ async def dl_model(model_request: ModelRequest):
         scaler_df = scaler_df.to_frame()
     if not isinstance(scaled_weight_df, pd.DataFrame):
         scaled_weight_df = scaled_weight_df.to_frame()
-
-  
-    # # Convert DataFrame to dict for JSONResponse
-    # return_data = {
-    #     # 'test_reg_param_df': test_reg_param_df.to_dict(orient='records'),
-    #     'portf_rtn': portf_rtn.to_json(orient="records"),
-    #     'portf_mkt_rtn': portf_mkt_rtn.to_json(orient="records"),
-    #     'stats_df': stats_df.to_json(orient="records"),
-    #     'scaler_df': scaler_df.to_json(orient="records"),
-    #     'scaled_weight_df':scaled_weight_df.to_json(orient="records"),
-    #     'figure_name':fig_perf
-    # }
-
+ 
+    # df to json
     return_data = {
-        'portf_rtn': json.loads(portf_rtn.to_json(orient="records")),
-        'portf_mkt_rtn': json.loads(portf_mkt_rtn.to_json(orient="records")),
-        'stats_df': json.loads(stats_df.to_json(orient="records")),
-        'scaler_df': json.loads(scaler_df.to_json(orient="records")),
-        'scaled_weight_df': json.loads(scaled_weight_df.to_json(orient="records")),
+        'portf_rtn': json.loads(portf_rtn.reset_index().to_json(orient="records")),
+        'portf_mkt_rtn': json.loads(portf_mkt_rtn.reset_index().to_json(orient="records")),
+        'stats_df': json.loads(stats_df.reset_index().to_json(orient="records")),
+        'scaler_df': json.loads(scaler_df.reset_index().to_json(orient="records")), # index is date
+        'scaled_weight_df': json.loads(scaled_weight_df.reset_index().to_json(orient="records")), # index is date
         'figure_name': fig_perf  # Make sure this is a string, not a raw figure
     }
 
+    # update db
     s3_path = upload_json_to_s3(key, return_data)
     link = store_result(key, s3_path)
 
