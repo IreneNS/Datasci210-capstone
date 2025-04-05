@@ -227,9 +227,9 @@ async def benchmark_model(benchmark_request: BenchmarkRequest):
         
     # df to dict for json
     return_data = {
-        'portf_rtn_test': json.loads(portf_rtn_test.to_json(orient="records")),
-        'portf_mkt_rtn_test': json.loads(portf_mkt_rtn_test.to_json(orient="records")),
-        'stats_df_test': json.loads(stats_df_test.to_json(orient="records")),
+        'portf_rtn_test': json.loads(portf_rtn_test.reset_index().to_json(orient="records")),
+        'portf_mkt_rtn_test': json.loads(portf_mkt_rtn_test.reset_index().to_json(orient="records")),
+        'stats_df_test': json.loads(stats_df_test.reset_index().to_json(orient="records")),
         'scaler_df_test': json.loads(scaler_df_test.reset_index().to_json(orient="records")), # reset index for date
         'scaled_weight_df_test':json.loads(scaled_weight_df_test.reset_index().to_json(orient="records")), # reset index for date
         'figure_name':fig_perf_test
