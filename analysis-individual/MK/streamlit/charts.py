@@ -12,85 +12,205 @@ class ChartGenerator:
         pass
 
     # Pie Chart for Portfolio Weights
+    # def generate_pie_chart(self, scaled_weight_df):
+    #     if not scaled_weight_df.empty:
+    #         # Debug: Print the DataFrame
+    #         st.write(scaled_weight_df)
+    #         st.write('sum:', sum(scaled_weight_df['Weight']))
+
+    #         # Ensure the 'Identifier' and 'Weight' columns are present and valid
+    #         if 'Identifier' in scaled_weight_df.columns and 'Weight' in scaled_weight_df.columns:
+    #             # Check if the Weight column has valid numerical data
+    #             if scaled_weight_df['Weight'].isna().any():
+    #                 st.error("The 'Weight' column contains NaN values.")
+    #             else:
+    #                 # Create the pie chart
+    #                 fig_pie = px.pie(scaled_weight_df, values="Weight", names="Identifier", title="Optimized Portfolio Asset Allocation")
+    #                 st.plotly_chart(fig_pie, use_container_width=True)
+    #         else:
+    #             st.error("The DataFrame is missing 'Identifier' or 'Weight' columns.")
+    #     else:
+    #         st.error("No weight data available.")
     def generate_pie_chart(self, scaled_weight_df):
         if not scaled_weight_df.empty:
-            # Debug: Print the DataFrame
-            st.write(scaled_weight_df)
-            st.write('sum:', sum(scaled_weight_df['Weight']))
+            # st.write(scaled_weight_df)
+            # st.write('sum:', sum(scaled_weight_df['Weight']))
 
-            # Ensure the 'Identifier' and 'Weight' columns are present and valid
-            if 'Identifier' in scaled_weight_df.columns and 'Weight' in scaled_weight_df.columns:
-                # Check if the Weight column has valid numerical data
+            if 'Stock Symbol' in scaled_weight_df.columns and 'Weight' in scaled_weight_df.columns:
                 if scaled_weight_df['Weight'].isna().any():
                     st.error("The 'Weight' column contains NaN values.")
+                    return
+
+                # Set threshold for grouping
+                threshold_value = 0.03  # 3%
+
+                # Separate large and small weights
+                large_slices = scaled_weight_df[scaled_weight_df["Weight"] > threshold_value]
+                small_slices = scaled_weight_df[scaled_weight_df["Weight"] <= threshold_value]
+
+                # Combine small slices into "Other"
+                if not small_slices.empty:
+                    other_total = small_slices["Weight"].sum()
+                    other_row = pd.DataFrame({"Stock Symbol": ["Stocks < 3%"], "Weight": [other_total]})
+                    updated_df = pd.concat([large_slices, other_row], ignore_index=True)
                 else:
-                    # Create the pie chart
-                    fig_pie = px.pie(scaled_weight_df, values="Weight", names="Identifier", title="Optimized Portfolio Asset Allocation")
-                    st.plotly_chart(fig_pie, use_container_width=True)
+                    updated_df = scaled_weight_df
+
+                # Plot pie chart
+                fig_pie = px.pie(updated_df, values="Weight", names="Stock Symbol", title="Optimized Portfolio Asset Allocation")
+                st.plotly_chart(fig_pie, use_container_width=True)
             else:
-                st.error("The DataFrame is missing 'Identifier' or 'Weight' columns.")
+                st.error("The DataFrame is missing 'Stock Symbol' or 'Weight' columns.")
         else:
             st.error("No weight data available.")
 
     # Cumulative Returns Comparison
-    def generate_cumulative_returns_chart(self, portf_mkt_rtn_df):
+    def generate_cumulative_returns_chart(self, portf_mkt_rtn_df, bm):
         if not portf_mkt_rtn_df.empty:
-            portf_mkt_rtn_df['Cumulative Benchmark Return'] = (1 + portf_mkt_rtn_df['Benchmark Return']).cumprod()
             fig_cumulative = go.Figure()
-            fig_cumulative.add_trace(go.Scatter(x=portf_mkt_rtn_df['Date'], y=portf_mkt_rtn_df['Cumulative Benchmark Return'],
-                                                mode='lines', name='Cumulative Benchmark Return',
-                                                line=dict(color=berkeley_blue, width=2)))
-            fig_cumulative.add_trace(go.Scatter(x=portf_mkt_rtn_df['Date'], y=portf_mkt_rtn_df['Cumulative Benchmark Return'],
-                                                mode='lines', name='Cumulative Unscaled Market Return',
-                                                line=dict(color=california_gold, width=2)))
-            fig_cumulative.update_layout(xaxis_title="Date", yaxis_title="Cumulative Return (%)", margin=dict(l=40, r=40, t=40, b=40))
+            
+            if bm:
+                portf_mkt_rtn_df['Cumulative Benchmark Return'] = (1 + portf_mkt_rtn_df['Benchmark Return']).cumprod()
+                portf_mkt_rtn_df['Cumulative Market Return'] = (1 + portf_mkt_rtn_df['Unscaled Market Return']).cumprod()
+                
+                fig_cumulative.add_trace(go.Scatter(
+                    x=portf_mkt_rtn_df['Date'], y=portf_mkt_rtn_df['Cumulative Benchmark Return'],
+                    mode='lines', name='Cumulative Benchmark Return',
+                    line=dict(color=berkeley_blue, width=2)
+                ))
+
+            else:
+                portf_mkt_rtn_df['Cumulative Deep Learning Return'] = (1 + portf_mkt_rtn_df['Deep Learning Return']).cumprod()
+                fig_cumulative.add_trace(go.Scatter(
+                    x=portf_mkt_rtn_df['Date'], y=portf_mkt_rtn_df['Cumulative Deep Learning Return'],
+                    mode='lines', name='Cumulative Deep Learning Return',
+                    line=dict(color=berkeley_blue, width=2)
+                ))
+
+            # Common unscaled market trace
+            portf_mkt_rtn_df['Cumulative Market Return'] = (1 + portf_mkt_rtn_df['Unscaled Market Return']).cumprod()
+            fig_cumulative.add_trace(go.Scatter(
+                x=portf_mkt_rtn_df['Date'], y=portf_mkt_rtn_df['Cumulative Market Return'],
+                mode='lines', name='Cumulative Unscaled Market Return',
+                line=dict(color=california_gold, width=2)
+            ))
+
+            # division_date = portf_mkt_rtn_df.loc[portf_mkt_rtn_df['label'] == "Train vs. Test Division", "Date"]
+            # if not division_date.empty:
+            #     fig_cumulative.add_vline(
+            #         x=division_date.iloc[0],
+            #         line=dict(color="black", width=2, dash="dash"),
+            #         annotation_text="Train vs. Test Division",
+            #         annotation_position="top right"
+            #     )
+
+            fig_cumulative.update_layout(
+                title="Cumulative Return Comparison",
+                xaxis_title="Date", yaxis_title="Cumulative Return",
+                margin=dict(l=40, r=40, t=40, b=40)
+            )
             st.plotly_chart(fig_cumulative, use_container_width=True)
         else:
             st.error("No cumulative return data available.")
 
+
     # Rolling Annual Volatility Comparison
-    def generate_volatility_chart(self, portf_mkt_rtn_df):
+    def generate_volatility_chart(self, portf_mkt_rtn_df, bm, last_win_only=False):
         if not portf_mkt_rtn_df.empty:
-            portf_mkt_rtn_df['Rolling Vol Benchmark'] = portf_mkt_rtn_df['Benchmark Return'].rolling(window=60).std() * np.sqrt(252)
-            portf_mkt_rtn_df['Rolling Vol Unscaled Market'] = portf_mkt_rtn_df['Unscaled Market Return'].rolling(window=60).std() * np.sqrt(252)
+            window_size = 60 if last_win_only else 252
             fig_rolling_vol = go.Figure()
-            fig_rolling_vol.add_trace(go.Scatter(x=portf_mkt_rtn_df['Date'], y=portf_mkt_rtn_df['Rolling Vol Benchmark'],
-                                                 mode='lines', name='Rolling Volatility (Benchmark)', line=dict(color=berkeley_blue, width=2)))
-            fig_rolling_vol.add_trace(go.Scatter(x=portf_mkt_rtn_df['Date'], y=portf_mkt_rtn_df['Rolling Vol Unscaled Market'],
-                                                 mode='lines', name='Rolling Volatility (Unscaled Market)', line=dict(color=california_gold, width=2)))
-            fig_rolling_vol.update_layout(xaxis_title="Date", yaxis_title="Annualized Volatility (%)", margin=dict(l=40, r=40, t=40, b=40))
+
+            # Always compute unscaled market volatility
+            portf_mkt_rtn_df['Rolling Vol Unscaled Market'] = (
+                portf_mkt_rtn_df['Unscaled Market Return'].rolling(window=window_size).std() * np.sqrt(252)
+            )
+
+            if bm:
+                portf_mkt_rtn_df['Rolling Vol Benchmark'] = (
+                    portf_mkt_rtn_df['Benchmark Return'].rolling(window=window_size).std() * np.sqrt(252)
+                )
+                fig_rolling_vol.add_trace(go.Scatter(
+                    x=portf_mkt_rtn_df['Date'], y=portf_mkt_rtn_df['Rolling Vol Benchmark'],
+                    mode='lines', name='Rolling Volatility (Benchmark)',
+                    line=dict(color=berkeley_blue, width=2)
+                ))
+            else:
+                portf_mkt_rtn_df['Rolling Vol Deep Learning'] = (
+                    portf_mkt_rtn_df['Deep Learning Return'].rolling(window=window_size).std() * np.sqrt(252)
+                )
+                fig_rolling_vol.add_trace(go.Scatter(
+                    x=portf_mkt_rtn_df['Date'], y=portf_mkt_rtn_df['Rolling Vol Deep Learning'],
+                    mode='lines', name='Rolling Volatility (Deep Learning)',
+                    line=dict(color=berkeley_blue, width=2)
+                ))
+
+            # This is now safe to include
+            fig_rolling_vol.add_trace(go.Scatter(
+                x=portf_mkt_rtn_df['Date'], y=portf_mkt_rtn_df['Rolling Vol Unscaled Market'],
+                mode='lines', name='Rolling Volatility (Unscaled Market)',
+                line=dict(color=california_gold, width=2)
+            ))
+
+            # division_date = portf_mkt_rtn_df.loc[portf_mkt_rtn_df['label'] == "Train vs. Test Division", "Date"]
+            # if not division_date.empty:
+            #     fig_rolling_vol.add_vline(
+            #         x=division_date.iloc[0],
+            #         line=dict(color="black", width=2, dash="dash"),
+            #         annotation_text="Train vs. Test Division",
+            #         annotation_position="top right"
+            #     )
+
+
+            fig_rolling_vol.update_layout(
+                title="Rolling Annual Volatility Comparison",
+                xaxis_title="Date", yaxis_title="Annualized Volatility",
+                margin=dict(l=40, r=40, t=40, b=40)
+            )
             st.plotly_chart(fig_rolling_vol, use_container_width=True)
         else:
             st.error("No rolling volatility data available.")
 
-    # Weights Table
-    def generate_weights_table(self, scaled_weight_df):
-        """Generate the portfolio weights table."""
-        st.subheader("Portfolio Weights Table")
-        weights_placeholder = st.empty()
 
-        if scaled_weight_df is not None and isinstance(scaled_weight_df, pd.DataFrame) and not scaled_weight_df.empty:
-            weights_placeholder.dataframe(scaled_weight_df)
+
+    # Weights Table
+    def generate_weights_table(self, bm_df, model_df):
+        """Generate the portfolio weights table."""
+        if not bm_df.empty and not model_df.empty:
+            # Merge while keeping the order of bm_df
+            combined_df = pd.merge(
+                bm_df, model_df, on="Stock Symbol", how="left", suffixes=("_Benchmark", "_Model")
+            )
+
+            # Fill missing weights with 0
+            combined_df["Weight_Model"] = combined_df["Weight_Model"].fillna(0)
+
+            # Format weights as percentages
+            combined_df["Benchmark Weight (%)"] = (combined_df["Weight_Benchmark"] * 100).round(2)
+            combined_df["Deep Learning Weight(%)"] = (combined_df["Weight_Model"] * 100).round(2)
+
+            # Prepare display dataframe
+            display_df = combined_df[["Stock Symbol", "Benchmark Weight (%)", "Deep Learning Weight(%)"]]
+            display_df.index = range(1, len(display_df) + 1)
+
+            st.dataframe(display_df)
+
         else:
-            weights_placeholder.markdown("Weights data unavailable or invalid.")  # Placeholder message
+            st.error("Weights data unavailable or invalid.")
 
     # Static Stats Table
-    def generate_stats_table(self, stats_parsed_df, pkl):
-        if stats_parsed_df is not None:
-            if pkl:
-                new_col_names = {"Daily-DL-Max-Sharpe": "Daily DL Max Sharpe",
-                                 "Daily-DL-Max-Sharpe w senti": "Daily DL Max Sharpe with Sentiment",
-                                 "Daily-Benchmark": "Daily Benchmark"}
+    def generate_stats_table(self, bm_df, model_df):
+        print('generate_stats_table()')
+        if bm_df is not None and model_df is not None:
+            common_columns = bm_df.columns.intersection(model_df.columns)
+            bm_df = bm_df.drop(columns=common_columns)
+            combined_df = pd.concat([bm_df, model_df], axis=1)
+            # combined_df.columns = ["Benchmark", "Model"]
 
-                new_idx_names = {"avg_rtn_ann": "Average Annual Return",
-                                 "vol_ann": "Annual Volatility",
-                                 "sharpe_ann": "Annual Max Sharpe",
-                                 "max_drawdown": "Max Drawdown"}
 
-                stats_parsed_df = stats_parsed_df.rename(columns=new_col_names, index = new_idx_names)
-                st.dataframe(stats_parsed_df)
-            else:
-                st.dataframe(stats_parsed_df)
+
+            st.dataframe(combined_df)
+        elif bm_df is not None:
+            st.dataframe(bm_df)
         else:
             st.error("Error parsing or displaying portfolio statistics.")
 
@@ -112,6 +232,26 @@ class ChartGenerator:
         )
         fig_sentiment.update_layout(barmode="stack", xaxis=dict(title="Probability"), height=180, margin=dict(l=20, r=20, t=40, b=20), showlegend=True)
         st.plotly_chart(fig_sentiment, use_container_width=True)
+
+    # Next Day Return Probability Chart
+    def generate_next_day_return_chart(self, last_day):
+        next_day_return_prob = last_day['predicted_continuous_return'].values[0]
+
+        st.markdown(f"""
+                    <style>
+                    .stProgress > div > div > div {{
+                        height: 20px !important;
+                        border-radius: 5px !important;
+                    }}
+                    .stProgress > div > div > div > div {{
+                        background-color: {berkeley_blue} !important;
+                        height: 20px !important;
+                        border-radius: 5px !important;
+                    }}
+                    </style>
+                """, unsafe_allow_html=True)
+
+        st.progress(next_day_return_prob, text=f"📈 Probability of Positive Next-Day Return: {next_day_return_prob * 100:.1f}%")
 
     # Static Backtest Performance Chart
     # def generate_backtest_chart(self, portf_rtn_df, portf_mkt_rtn_df):

@@ -108,18 +108,7 @@ def fetch_s3_data(data_type="tickers", stock_count = None):
         else:
             st.error(f"Invalid stock count: {stock_count}. Choose 100, 200, or 300.")
             return None
-        
         return_type = "dataframe"
-        # # Fetch the DataFrame (assuming it's pickled)
-        # try:
-        #     response = requests.get(s3_url)
-        #     response.raise_for_status()  # Ensure successful request
-            
-        #     tickers_df = pd.read_pickle(BytesIO(response.content))  # Load the pickle into a DataFrame
-        #     return tickers_df
-        # except Exception as e:
-        #     st.error(f"Error fetching tickers from {s3_url}: {e}")
-        #     return None
     elif data_type == "stats":
         s3_url = st.secrets["s3"]["stats_url"]
         return_type = "dataframe"  # Expecting DataFrame
@@ -178,9 +167,9 @@ def fetch_s3_data(data_type="tickers", stock_count = None):
 
 
             new_label_names = {"Daily-DL-with-senti": "Daily DL with Sentiment",
-                           "Daily-DL": "Daily DL",
-                           "Daily-Benchmark": "Daily Benchmark",
-                           "Train vs Test Division": "Train vs. Test Division"}
+                               "Daily-DL": "Daily DL",
+                               "Daily-Benchmark": "Daily Benchmark",
+                               "Train vs Test Division": "Train vs. Test Division"}
             cumulative_df['label'] = cumulative_df['label'].replace(new_label_names)
             vol_df['label'] = vol_df['label'].replace(new_label_names)
 
@@ -192,4 +181,3 @@ def fetch_s3_data(data_type="tickers", stock_count = None):
     except Exception as e:
         st.error(f"Error fetching data from {s3_url}: {e}")
         return None
-        
