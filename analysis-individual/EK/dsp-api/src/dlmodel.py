@@ -121,7 +121,7 @@ def portfolio_performance(input_df, weight_df, portf_name, rebal_freq, mkt_df,
 
     if vol_scaler_flag:
         portf_rtn_0 = portf_rtn.copy()
-        portf_rtn = (portf_rtn_0*(scaling_vol_tgt/np.sqrt(252))/(portf_rtn_0.rolling(60, min_periods=2).std())).fillna(0) #IN mod2
+        portf_rtn = (portf_rtn_0*(scaling_vol_tgt/np.sqrt(252))/(portf_rtn_0.rolling(60, min_periods=20).std())) #IN mod2
         scaler_df = portf_rtn.div(portf_rtn_0, axis=0)
         # scaled_mkt = mkt_df['return_sp']*scaling_vol_tgt/mkt_df['return_sp'].rolling(60).std()
         # unscaled_mkt = mkt_df['return_sp']

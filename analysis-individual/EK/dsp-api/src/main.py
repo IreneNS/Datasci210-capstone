@@ -203,7 +203,7 @@ async def benchmark_model(benchmark_request: BenchmarkRequest):
 
     # evaluate the test model
     portf_rtn_test, portf_mkt_rtn_test, stats_df_test, scaler_df_test, fig_perf_test, scaled_weight_df_test = \
-        bm_model_obj.eval('test', opt_flag, last_win_only, vol_scaler_flag=False, scaling_vol_tgt=0.2, plot_show=False)
+        bm_model_obj.eval('test', opt_flag, last_win_only, vol_scaler_flag=True, scaling_vol_tgt=0.2, plot_show=False)
 
 
     # clean nans
