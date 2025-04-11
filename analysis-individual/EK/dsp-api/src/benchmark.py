@@ -28,6 +28,7 @@ import boto3
 from datetime import datetime
 from io import BytesIO
 import gc
+from tqdm.auto import tqdm
 # import importlib
 # importlib.reload(data_unit)
 
@@ -324,7 +325,7 @@ class Benchmark_model_DL:
 
         return input_used, sel_features_adj
 
-    def train(self, checkpoint_name, ticker_list, opt_flag, target_risk=0.2, verbose=True):
+    def train(self, checkpoint_name, ticker_list, opt_flag, target_risk, verbose=True):
         #IN: rebal_freq = 'D', 'W', or 'M'
         # opt_flag = 'target_risk' or 'max_sharpe'; 
         # when 'target_risk' flag is chosen, target_risk param needs to be provided
@@ -371,7 +372,7 @@ class Benchmark_model_DL:
 
         def regression_n_opt_t(date, dates_train_daily, rolling_ana_data_used, opt_flag, target_risk):
             ''' regression (for factor weights and next period exp return)'''
-            print (date)
+            # print (date)
             index_in_daily_dates = list(dates_train_daily).index(dates_train_daily[dates_train_daily<=date][-1])
 
             date_period = dates_train_daily[max(0,(index_in_daily_dates+1)-252*1)
@@ -429,7 +430,7 @@ class Benchmark_model_DL:
         print ('Start parallel running..')
         res_list = Parallel(n_jobs=-1)(delayed(
             regression_n_opt_t)(date, dates_train_daily, rolling_ana_data_used, opt_flag, target_risk)
-            for date in rebal_dates
+            for date in tqdm(rebal_dates)
         )
 
         # Organize the results
@@ -451,6 +452,7 @@ class Benchmark_model_DL:
         # therefore the test is OOS test with the same set up as train, which train model at each rebal
         # for MVP purpose, we can choose to only run last window at the end of data provided to show just the last model results without history performance
 
+        print(f'target risk: {target_risk}')
         rebal_freq = self.rebal_freq
         self.checkpoint_name = checkpoint_name
         if last_win_only is True:
@@ -502,7 +504,7 @@ class Benchmark_model_DL:
 
         def regression_n_opt_t(date, dates_train_daily, rolling_ana_data_used, opt_flag, target_risk):
             ''' regression (for factor weights and next period exp return)'''
-            print (date)
+            # print (date)
             index_in_daily_dates = list(dates_train_daily).index(dates_train_daily[dates_train_daily<=date][-1])
 
             date_period = dates_train_daily[max(0,(index_in_daily_dates+1)-252*1)
@@ -560,7 +562,7 @@ class Benchmark_model_DL:
         print ('Start parallel running..')
         res_list = Parallel(n_jobs=-1)(delayed(
             regression_n_opt_t)(date, dates_train_daily, rolling_ana_data_used, opt_flag, target_risk)
-            for date in rebal_dates
+            for date in tqdm(rebal_dates)
         )
 
         # Organize the results
@@ -642,10 +644,68 @@ class Benchmark_model_DL:
             pickle.dump(self, f)
     
 
+def benchmark_run_train(data_directory, data_checkpoint_name, start_date, train_end_date,
+                         model_directory, model_checkpoint_name,
+                         ticker_list, rebal_freq, opt_flag, target_risk=0.2, force_retrain=True, 
+                         force_take_new_data=True, verbose=True): #IN_mod2
+    
+    print(f'target risk: {target_risk}')
+
+    data_obj = data_unit.data_main(data_directory, data_checkpoint_name, start_date, train_end_date, verbose=False)
+
+    bm_model_obj = Benchmark_model_DL(data_obj, rebal_freq)
+    print(bm_model_obj) 
+    
+    # if force_retrain is on, retrain, otherwise, check if model exists with given directory and checkpoint name #IN_mod
+    # note: force retrain will not create a new model object, just delete the current target model, recreate that part in existing obj
+    bm_model_obj.set_model_directory(model_directory)
+
+    if bm_model_obj.check_checkpoint_model(model_checkpoint_name): #IN_mod
+        bm_model_obj = bm_model_obj.load_model(model_checkpoint_name)
+        print ('\nAfter loading model..')
+        print(bm_model_obj)  
+        if opt_flag in bm_model_obj.opt_trained:
+            if force_retrain: # IN mod
+                print ('\nForce training is on:')
+                del bm_model_obj.model_output_dic[f'train_results_{opt_flag}']
+                bm_model_obj.opt_trained.remove(f'{opt_flag}')
+                # bm_model_obj.save_model_obj(model_directory, model_checkpoint_name)
+                if force_take_new_data == True: #IN mod2
+                    bm_model_obj.train_used = None
+                    bm_model_obj.sel_features_adj=None
+                    bm_model_obj.input_data_obj = data_obj # reattach new data obj
+                print ('\nThe model obj before retraining:')
+                print(bm_model_obj)
+                train_reg_param_df, train_exp_exc_rtn_df, train_opt_weight_df =\
+                    bm_model_obj.train(model_checkpoint_name, ticker_list, opt_flag, target_risk, verbose)
+                print ('\nRetraining finished:')
+                print (bm_model_obj)
+                # bm_model_obj.save_model_obj(model_directory, model_checkpoint_name)
+
+            else:
+                train_reg_param_df = bm_model_obj.model_output_dic[f'train_results_{opt_flag}']['reg_param_df'] 
+                train_exp_exc_rtn_df = bm_model_obj.model_output_dic[f'train_results_{opt_flag}']['exp_exc_rtn_df']
+                train_opt_weight_df = bm_model_obj.model_output_dic[f'train_results_{opt_flag}']['opt_weight_df']
+        else: #IN: this option is to continue to build on existing object instead of start anew
+            train_reg_param_df, train_exp_exc_rtn_df, train_opt_weight_df =\
+            bm_model_obj.train(model_checkpoint_name, ticker_list, opt_flag, target_risk, verbose)
+
+            # bm_model_obj.save_model_obj(model_directory, model_checkpoint_name)
+    else:
+        train_reg_param_df, train_exp_exc_rtn_df, train_opt_weight_df =\
+            bm_model_obj.train(model_checkpoint_name, ticker_list, opt_flag, target_risk, verbose)
+        
+        # bm_model_obj.save_model_obj(model_directory, model_checkpoint_name)
+    
+    print(bm_model_obj)   
+    return bm_model_obj, train_reg_param_df, train_exp_exc_rtn_df, train_opt_weight_df
+
+
 def benchmark_run_test(data_directory, data_checkpoint_name, start_date, train_end_date,
                          model_directory, model_checkpoint_name,
                          ticker_list, rebal_freq, opt_flag, last_win_only=False, 
                          target_risk=0.2, force_retrain=True, force_take_new_data=True, verbose=True): #IN_mod
+    print(f'target risk: {target_risk}')
 
     data_obj = data_unit.data_main(data_directory, data_checkpoint_name, start_date, train_end_date, verbose=False)
 

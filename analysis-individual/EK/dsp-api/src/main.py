@@ -14,6 +14,7 @@ import io
 import base64
 import boto3
 import gc
+import pickle
 from src.benchmark import *
 from src.dlmodel import *
 
@@ -87,6 +88,13 @@ def upload_json_to_s3(key, json_item):
     logger.info(f's3 url: {s3_url}')
 
     return s3_url
+
+def prepare_df(df):
+    df = df.replace([np.inf, -np.inf], None).replace(np.nan, None)
+    if not isinstance(df, pd.DataFrame):
+        df = df.to_frame()
+    df = df.reset_index()
+    return df
 
 
 @asynccontextmanager
@@ -185,7 +193,7 @@ async def benchmark_model(benchmark_request: BenchmarkRequest):
     data_directory = os.path.join(current_directory, 'dependencies/benchmark_model')
     model_directory = os.path.join(current_directory, 'dependencies/benchmark_model')
     data_checkpoint_name = 'data_checkpoint4'
-    start_date = '2000-01-01'
+    start_date = '2001-01-01'
     train_end_date = '2023-12-31'
 
     model_checkpoint_name = 'bm_model_checkpoint2'
@@ -194,7 +202,44 @@ async def benchmark_model(benchmark_request: BenchmarkRequest):
     target_risk = benchmark_request.target_risk
     last_win_only = benchmark_request.last_win_only
 
-    ## test model - benchmark model
+    print(data_directory)
+
+    fig_perf_train = ''
+    fig_perf_test = ''
+
+    # with open(f'{data_directory}/portf_rtn_comb.pkl', 'rb') as f:
+    #     portf_rtn_comb = pickle.load(f)
+
+    # # test model - benchmark model
+    # bm_model_obj, train_reg_param_df, train_exp_exc_rtn_df, train_opt_weight_df=\
+    #     benchmark_run_train(data_directory, data_checkpoint_name, start_date, train_end_date,
+    #                         model_directory, model_checkpoint_name,
+    #                         ticker_list, rebal_freq, opt_flag, target_risk=target_risk, 
+    #                         force_retrain=True, force_take_new_data=True, verbose=True)
+
+    # # evaluate the test model
+    # portf_rtn_train, portf_mkt_rtn_train, stats_df_train, scaler_df_train, fig_perf_train, scaled_weight_df_train = \
+    #     bm_model_obj.eval('train', opt_flag, last_win_only, vol_scaler_flag=True, scaling_vol_tgt=target_risk, plot_show=False)
+    
+    # portf_rtn_train = prepare_df(portf_rtn_train)
+    # portf_mkt_rtn_train = prepare_df(portf_mkt_rtn_train)
+    # stats_df_train = prepare_df(stats_df_train)
+    # scaler_df_train = prepare_df(scaler_df_train)
+    # scaled_weight_df_train = prepare_df(scaled_weight_df_train)
+
+    # portf_rtn_train = portf_rtn_train.to_csv('portf_rtn_train.csv')
+    # portf_mkt_rtn_train = portf_mkt_rtn_train.to_csv('portf_mkt_rtn_train.csv')   
+    # stats_df_train = stats_df_train.to_csv('stats_df_train.csv')
+    # scaler_df_train = scaler_df_train.to_csv('scaler_df_train.csv')
+    # scaled_weight_df_train = scaled_weight_df_train .to_csv('scaled_weight_df_train.csv')
+
+    # portf_rtn_train = pd.read_csv(f'{data_directory}/portf_rtn_train.csv').iloc[:,1:]
+    # portf_mkt_rtn_train = pd.read_csv(f'{data_directory}/portf_mkt_rtn_train.csv').iloc[:,1:]
+    # stats_df_train = pd.read_csv(f'{data_directory}/stats_df_train.csv').iloc[:,1:]
+    # scaler_df_train = pd.read_csv(f'{data_directory}/scaler_df_train.csv').iloc[:,1:]
+    # scaled_weight_df_train = pd.read_csv(f'{data_directory}/scaled_weight_df_train.csv').iloc[:,1:]
+
+    # ## test model - benchmark model
     bm_model_obj, test_reg_param_df, test_exp_exc_rtn_df, test_opt_weight_df=\
         benchmark_run_test(data_directory, data_checkpoint_name, start_date, train_end_date,
                             model_directory, model_checkpoint_name,
@@ -207,24 +252,12 @@ async def benchmark_model(benchmark_request: BenchmarkRequest):
 
 
     # clean nans
-    portf_rtn_test = portf_rtn_test.replace([np.inf, -np.inf], None).replace(np.nan, None)
-    portf_mkt_rtn_test = portf_mkt_rtn_test.replace([np.inf, -np.inf], None).replace(np.nan, None)
-    stats_df_test = stats_df_test.replace([np.inf, -np.inf], None).replace(np.nan, None)
-    scaler_df_test = scaler_df_test.replace([np.inf, -np.inf], None).replace(np.nan, None)
-    scaled_weight_df_test = scaled_weight_df_test.replace([np.inf, -np.inf], None).replace(np.nan, None)
+    portf_rtn_test = prepare_df(portf_rtn_test)
+    portf_mkt_rtn_test = prepare_df(portf_mkt_rtn_test)
+    stats_df_test = prepare_df(stats_df_test)
+    scaler_df_test = prepare_df(scaler_df_test)
+    scaled_weight_df_test = prepare_df(scaled_weight_df_test)
 
-    # prepare dfs
-    if not isinstance(portf_rtn_test, pd.DataFrame):
-        portf_rtn_test = portf_rtn_test.to_frame()
-    if not isinstance(portf_mkt_rtn_test, pd.DataFrame):
-        portf_mkt_rtn_test = portf_mkt_rtn_test.to_frame()
-    if not isinstance(stats_df_test, pd.DataFrame):
-        stats_df_test = stats_df_test.to_frame()
-    if not isinstance(scaler_df_test, pd.DataFrame):
-        scaler_df_test = scaler_df_test.to_frame()
-    if not isinstance(scaled_weight_df_test, pd.DataFrame):
-        scaled_weight_df_test = scaled_weight_df_test.to_frame()
-        
     # df to dict for json
     return_data = {
         'portf_rtn_test': json.loads(portf_rtn_test.reset_index().to_json(orient="records")),
@@ -232,8 +265,46 @@ async def benchmark_model(benchmark_request: BenchmarkRequest):
         'stats_df_test': json.loads(stats_df_test.reset_index().to_json(orient="records")),
         'scaler_df_test': json.loads(scaler_df_test.reset_index().to_json(orient="records")), # reset index for date
         'scaled_weight_df_test':json.loads(scaled_weight_df_test.reset_index().to_json(orient="records")), # reset index for date
-        'figure_name':fig_perf_test
+        'figure_name_test':fig_perf_test
     }
+    
+    # portf_rtn_test = pd.read_csv(f'{data_directory}/portf_rtn_test.csv').iloc[:,1:]
+    # portf_mkt_rtn_test = pd.read_csv(f'{data_directory}/portf_mkt_rtn_test.csv').iloc[:,1:]
+    # stats_df_test = pd.read_csv(f'{data_directory}/stats_df_test.csv').iloc[:,1:]
+    # scaler_df_test = pd.read_csv(f'{data_directory}/scaler_df_test.csv').iloc[:,1:]
+    # scaled_weight_df_test = pd.read_csv(f'{data_directory}/scaled_weight_df_test.csv').iloc[:,1:]
+
+    # prepared train_val + test combine results:
+    # portf_rtn_comb = pd.concat([portf_rtn_train, portf_rtn_test])
+    # print(portf_mkt_rtn_train.columns)
+    # portf_mkt_rtn_train.columns = ['date','Daily-Benchmark', 'Unscaled Market']
+    # portf_mkt_rtn_test.columns = ['date','Daily-Benchmark', 'Unscaled Market']
+    # portf_mkt_rtn_comb = pd.concat([portf_mkt_rtn_train.iloc[:, 1:], portf_mkt_rtn_test.iloc[:, 1:]])
+    
+    # portf_name = 'Daily-Benchmark'
+
+    # stats_df_comb = pd.DataFrame(columns=['Daily-Benchmark', 'Unscaled Market'])
+    # stats_df_comb.loc['avg_rtn_ann',:] = portf_mkt_rtn_comb.mean()*252
+    # stats_df_comb.loc['vol_ann',:] = portf_mkt_rtn_comb.std()*np.sqrt(252)
+    # stats_df_comb.loc['sharpe_ann',:] = stats_df_comb.loc['avg_rtn_ann',:]/stats_df_comb.loc['vol_ann',:]
+    # stats_df_comb.loc['max_drawdown', portf_name] = mmd_cal(portf_mkt_rtn_comb, portf_name).iloc[-1]
+    # stats_df_comb.loc['max_drawdown','Unscaled Market'] = mmd_cal(portf_mkt_rtn_comb, 'Unscaled Market').iloc[-1]
+
+    # scaler_df_comb = pd.concat([scaler_df_train, scaler_df_test]).ffill()
+    # scaled_weight_df_comb = pd.concat([scaled_weight_df_train, scaled_weight_df_test])
+
+    
+
+    # # df to dict for json
+    # return_data = {
+    #     'portf_rtn_comb': json.loads(portf_rtn_comb.reset_index().to_json(orient="records")),
+    #     'portf_mkt_rtn_comb': json.loads(portf_mkt_rtn_comb.reset_index().to_json(orient="records")),
+    #     'stats_df_comb': json.loads(stats_df_comb.reset_index().to_json(orient="records")),
+    #     'scaler_df_comb': json.loads(scaler_df_comb.reset_index().to_json(orient="records")), # reset index for date
+    #     'scaled_weight_df_comb':json.loads(scaled_weight_df_comb.reset_index().to_json(orient="records")), # reset index for date
+    #     'figure_name_train':fig_perf_train,
+    #     'figure_name_test':fig_perf_test
+    # }
 
     # fill db
     s3_path = upload_json_to_s3(key, return_data)
@@ -270,23 +341,11 @@ async def dl_model(model_request: ModelRequest):
         run_dl_for_interface(period, last_win_only, ticker_list, scaling_vol_tgt, verbose=True)
 
     # clean nans
-    portf_rtn = portf_rtn.replace([np.inf, -np.inf], None).replace(np.nan, None)
-    portf_mkt_rtn = portf_mkt_rtn.replace([np.inf, -np.inf], None).replace(np.nan, None)
-    stats_df = stats_df.replace([np.inf, -np.inf], None).replace(np.nan, None)
-    scaler_df = scaler_df.replace([np.inf, -np.inf], None).replace(np.nan, None)
-    scaled_weight_df = scaled_weight_df.replace([np.inf, -np.inf], None).replace(np.nan, None)
-
-    # create dfs
-    if not isinstance(portf_rtn, pd.DataFrame):
-        portf_rtn = portf_rtn.to_frame()
-    if not isinstance(portf_mkt_rtn, pd.DataFrame):
-        portf_mkt_rtn = portf_mkt_rtn.to_frame()
-    if not isinstance(stats_df, pd.DataFrame):
-        stats_df = stats_df.to_frame()
-    if not isinstance(scaler_df, pd.DataFrame):
-        scaler_df = scaler_df.to_frame()
-    if not isinstance(scaled_weight_df, pd.DataFrame):
-        scaled_weight_df = scaled_weight_df.to_frame()
+    portf_rtn = prepare_df(portf_rtn)
+    portf_mkt_rtn = prepare_df(portf_mkt_rtn)
+    stats_df = prepare_df(stats_df)
+    scaler_df = prepare_df(scaler_df)
+    scaled_weight_df = prepare_df(scaled_weight_df)
  
     # df to json
     return_data = {

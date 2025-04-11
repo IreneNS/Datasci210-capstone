@@ -119,19 +119,22 @@ def portfolio_performance(input_df, weight_df, portf_name, rebal_freq, mkt_df,
         weight_df=weight_df.asfreq('D').ffill(limit=ff_n).reindex(return_df.index).where(~(return_df.isnull()), 0)
     portf_rtn = (return_df*weight_df).sum(axis=1)
 
-    if vol_scaler_flag:
+    if vol_scaler_flag is True:
         portf_rtn_0 = portf_rtn.copy()
-        portf_rtn = (portf_rtn_0*(scaling_vol_tgt/np.sqrt(252))/(portf_rtn_0.rolling(60, min_periods=20).std())) #IN mod2
+        if (last_win_only is True) or (portf_rtn.index[0]>=datetime.strptime('2021-01-01', '%Y-%m-%d')): #IN mod5
+            portf_rtn = (portf_rtn_0*(scaling_vol_tgt/np.sqrt(252))/(portf_rtn_0.rolling(60, min_periods=20).std())) 
+        else: 
+            portf_rtn = portf_rtn_0*(scaling_vol_tgt/np.sqrt(252))/(portf_rtn_0.rolling(60).std())
         scaler_df = portf_rtn.div(portf_rtn_0, axis=0)
         # scaled_mkt = mkt_df['return_sp']*scaling_vol_tgt/mkt_df['return_sp'].rolling(60).std()
         # unscaled_mkt = mkt_df['return_sp']
-        unscaled_mkt = mkt_df['return_sp'].loc[portf_rtn.first_valid_index():]
+        unscaled_mkt = mkt_df['return_sp'].loc[portf_rtn.index[0]:]
 
     else:
         scaler_df = portf_rtn.div(portf_rtn, axis=0)
         # scaled_mkt = mkt_df['return_sp']*(portf_rtn.rolling(60).std()/mkt_df['return_sp'].rolling(60).std())
         # unscaled_mkt = mkt_df['return_sp']
-        unscaled_mkt = mkt_df['return_sp'].loc[portf_rtn.first_valid_index():]
+        unscaled_mkt = mkt_df['return_sp'].loc[portf_rtn.index[0]:]
     
     fig1, ax1 = plt.subplots(1,2, figsize=(11,3.5))
     portf_mkt_rtn = pd.concat([portf_rtn.rename(portf_name), unscaled_mkt.rename('Unscaled Market')], axis=1)
@@ -185,6 +188,7 @@ def portfolio_performance(input_df, weight_df, portf_name, rebal_freq, mkt_df,
         print(stats_df)    
 
     return portf_rtn, portf_mkt_rtn, stats_df, scaler_df, object_name
+
 
 def performance_comparison_all_recal(portf_rtn_df_l, mkt_rtn,\
                                rebal_freq, last_win_only=False, plot_show=True):
@@ -518,8 +522,9 @@ def run_dl_for_interface(period, last_win_only, ticker_list, scaling_vol_tgt, ve
     window_days = 128
     rebal_freq = 'D' # IN: 'D', 'W', 'M'
     opt_flag = 'max_sharpe'  #IN: 'target_risk' or 'max_sharpe'
-    target_risk = 0.2  #IN: this is an example of 20% annual portfolio risk
-    
+    target_risk = scaling_vol_tgt  #IN: this is an example of 20% annual portfolio risk
+    print(f'target risk: {target_risk}')
+    print(f'scaling_vol_tgt: {scaling_vol_tgt}')
     if last_win_only is True:
         rebal_dates = opt_dataset_dates[-252:]
     else:
@@ -631,7 +636,7 @@ def run_dl_for_interface(period, last_win_only, ticker_list, scaling_vol_tgt, ve
 
     portf_rtn, portf_mkt_rtn, stats_df, scaler_df, fig_perf = \
         portfolio_performance(rolling_ana_data_used, opt_weight_df, 'Daily-DeepLearning', 'D', mkt_data_used, \
-                        last_win_only=last_win_only, vol_scaler_flag=True, scaling_vol_tgt=0.2, plot_show=False)
+                        last_win_only=last_win_only, vol_scaler_flag=True, scaling_vol_tgt=scaling_vol_tgt, plot_show=False)
 
     print(scaler_df.dtypes)
     print(scaler_df)
