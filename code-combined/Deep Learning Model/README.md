@@ -1,1 +1,6 @@
-
+# Explaination of Files in This Folder:
+- Initial EDA notebook illustates the data collection, consolication, cleaning process for the data used in benchmark and deep learning models. It also includes related EDA analysis to facilitate the cleaning and understanding of raw data inputs.
+- Data retrieval file wraps the data collection, consolidation and cleaning process in an object oriented manner, for later processes to import and update data when needed.
+- Benchmark model notebook illustrates the entire benchmark modeling process from data retrieval (through data retrival file), modeling to result demonstration, in object oriented manner. Those results are compared with deep learning model results later.
+- Deep learning notebook (designed to be run on sagemaker multi-gpu instance) illustrates the deep learning process from data retrieval (through data retrieval file), datasets preparation, pytorch model building, training, to prediction making, optimization and results illustration. We also demonstrates the resullts comparing benchmark, deep learning (with and without sentiment) and market strategies as shown in our final delivery.
+- Deep learning deploy file is designed to facilitate the following infrastructure / API process for MVP purpose.
