@@ -1,10 +1,15 @@
 import streamlit as st
 from streamlit_extras.stylable_container import stylable_container
 
-from fetch_api import fetch_benchmark_data, fetch_model_data, fetch_s3_data
-from parse_utils import parse_api_data, convert_to_dataframe, convert_to_weight_dataframe, convert_to_stats_dataframe
+from fetch_api import fetch_benchmark_data, fetch_model_data
+from fetch_s3 import fetch_s3_data
+from parse_utils import parse_api_data, convert_to_dataframe, convert_to_weight_dataframe, convert_to_stats_dataframe, create_stats_dataframe
 from charts import ChartGenerator
-from theme import berkeley_blue, california_gold, white, light_grey  # Import colors
+from theme import *
+import view.view_top300 as view_top300
+import view.view_full as view_full
+import view.view_sentiment as view_sentiment
+import view.view_backtest as view_backtest
 
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -116,11 +121,15 @@ st.markdown(f"""
 # -------------------- SIDEBAR: USER INPUTS -------------------- #
 st.sidebar.header("Portfolio Configuration")
 with st.sidebar.form('portfolio_form'):
-    stock_options = [100, 200, 300]
-    selected_stock_count = st.selectbox("Select number of stocks:", stock_options)
+    stock_options = {
+                     # 'Top 100 S&P500 Stocks': 100, 
+                     # 'Top 200 S&P500 Stocks': 200, 
+                     'Top 300 S&P500 Stocks': 300,
+                     'Full S&P500 Universe': 0}
+    selected_stock_count = st.selectbox("Set Optimization Universe:", stock_options.keys())
 
     # Fetch tickers from the S3 based on the selected stock count
-    tickers_df = fetch_s3_data(data_type="tickers", stock_count=selected_stock_count)
+    tickers_df = fetch_s3_data(data_type="tickers", stock_count=stock_options[selected_stock_count])
 
     risk_tolerance = st.slider(
         "Risk Tolerance (Annual Volatility)", 
@@ -135,14 +144,30 @@ with st.sidebar.form('portfolio_form'):
     ):
         submit_button = st.form_submit_button("Run Optimization")
 
+    # Optimization strategy disclaimer (Moved to footer style)
+    st.sidebar.markdown("""
+        ---
+        **Optimization Objective:**\n
+        This portfolio is optimized to maximize the **Sharpe ratio**, balancing return and risk.
+    """)
+
+cum_df, vol_df = fetch_s3_data("backtest")
+# st.write(cum_df)
+# st.write(vol_df)
+stats_parsed_df = convert_to_stats_dataframe(fetch_s3_data("stats"), True, False)
+
+full = False
 if submit_button:
     ticker_list = []
-    if selected_stock_count == 200:
-        ticker_list = ['top_200_ticker_l']
-    elif selected_stock_count == 300:
+    # if '100' in selected_stock_count:
+    #     ticker_list = ['top_100_ticker_l']
+    # elif '200' in selected_stock_count:
+    #     ticker_list = ['top_200_ticker_l']
+    if '300' in selected_stock_count:
         ticker_list = ['top_300_ticker_l']
-    else:
-        ticker_list = ['top_100_ticker_l']
+    else: #full
+        ticker_list = []
+        full = True
 
     fetching_message = st.empty()
     fetching_message.subheader("Fetching Optimized Portfolio Data... ⏳")
@@ -150,6 +175,9 @@ if submit_button:
 
     benchmark_data = fetch_benchmark_data(ticker_list, "D", "max_sharpe", risk_tolerance, False)
     model_data = fetch_model_data(ticker_list, "D", "max_sharpe", risk_tolerance, False)
+    sentiment_df = pd.read_parquet('Sentiment_Predictions_w_Imputed_Values.parquet') #TODO
+    last_day = sentiment_df.iloc[-1:,:]
+
 
     # Fetching portfolio data
     if selected_stock_count:
@@ -164,124 +192,56 @@ if submit_button:
             # Clear the "Fetching Optimized Portfolio Data..." message
             fetching_message.empty()
 
-            print('portf_rtn')
-            benchmark_portf_rtn_df = convert_to_dataframe(parse_api_data(benchmark_data.get("portf_rtn_test", [])))
-            print('port_mkt_rtn')
-            benchmark_portf_mkt_rtn_df = convert_to_dataframe(parse_api_data(benchmark_data.get("portf_mkt_rtn_test", [])))
-            print('scaled_weight')
-            benchmark_scaled_weight_df = convert_to_weight_dataframe(parse_api_data(benchmark_data.get("scaled_weight_df_test", [])))
-            print('stats_parsed')
-            benchmark_stats_parsed_df = convert_to_stats_dataframe(parse_api_data(benchmark_data.get("stats_df_test", [])), False, True)
+            if not full: #only top 300
+                print('portf_rtn')
+                benchmark_portf_rtn_df = convert_to_dataframe(parse_api_data(benchmark_data.get("portf_rtn_comb", [])), True)
+                benchmark_stats_parsed_df = create_stats_dataframe(benchmark_portf_rtn_df)
+                # st.write(benchmark_portf_rtn_df)
 
-            print('model portf_rtn')
-            model_portf_rtn_df = convert_to_dataframe(parse_api_data(model_data.get("portf_rtn", [])))
-            print('model portf_mkt_rtn')
-            model_portf_mkt_rtn_df = convert_to_dataframe(parse_api_data(model_data.get("portf_mkt_rtn", [])))
-            print('model scaled_weight')
-            model_scaled_weight_df = convert_to_weight_dataframe(parse_api_data(model_data.get("scaled_weight_df", [])))
-            print('model stats_parsed')
-            model_stats_parsed_df = convert_to_stats_dataframe(parse_api_data(model_data.get("stats_df", [])), False, False)
+                print('model portf_rtn')
+                model_portf_rtn_df = convert_to_dataframe(parse_api_data(model_data.get("portf_rtn", [])), False)
+                print('model portf_mkt_rtn')
+                model_portf_mkt_rtn_df = convert_to_dataframe(parse_api_data(model_data.get("portf_mkt_rtn", [])), False)
+                print('model scaled_weight')
+                model_scaled_weight_df = convert_to_weight_dataframe(parse_api_data(model_data.get("scaled_weight_df", [])))
+                print('model stats_parsed')
+                model_stats_parsed_df = convert_to_stats_dataframe(parse_api_data(model_data.get("stats_df", [])), False, False)
 
-            # Generate and display charts
-            st.subheader("Optimized Portfolio Weights (Pie Chart)")
-            chart_generator.generate_pie_chart(model_scaled_weight_df)
+                view_top300.render(benchmark_portf_rtn_df, benchmark_stats_parsed_df, model_portf_rtn_df, model_portf_mkt_rtn_df, model_scaled_weight_df, model_stats_parsed_df)
+                st.divider()
+                view_sentiment.render(sentiment_df, last_day, 1)
+                st.divider()
+                view_backtest.render(cum_df, vol_df, stats_parsed_df)
+            else: #full
+                print('portf_rtn')
+                benchmark_portf_rtn_df = convert_to_dataframe(parse_api_data(benchmark_data.get("portf_rtn_comb", [])), False)
+                print(benchmark_portf_rtn_df)
+                print('port_mkt_rtn')
+                benchmark_portf_mkt_rtn_df = convert_to_dataframe(parse_api_data(benchmark_data.get("portf_mkt_rtn_comb", [])), False)
+                # print('scaled_weight')
+                # benchmark_scaled_weight_df = convert_to_weight_dataframe(parse_api_data(benchmark_data.get("scaled_weight_df_comb", [])))
+                print('stats_parsed')
+                benchmark_stats_parsed_df = convert_to_stats_dataframe(parse_api_data(benchmark_data.get("stats_df_comb", [])), False, True)
 
-            st.subheader("Performance Comparison")
-            st.markdown("##### Benchmark Model")
-            col1, col2 = st.columns(2)
-            with col1:
-                st.markdown("###### Cumulative Returns Comparison")
-                # st.write("Columns in DataFrame:", benchmark_portf_mkt_rtn_df.columns)
-                # st.write(benchmark_portf_mkt_rtn_df)
-                chart_generator.generate_cumulative_returns_chart(benchmark_portf_mkt_rtn_df, True)
-            with col2:
-                st.markdown("###### Rolling Annual Volatility Comparison")
-                chart_generator.generate_volatility_chart(benchmark_portf_mkt_rtn_df, True)
+                print('model portf_rtn')
+                model_portf_rtn_df = convert_to_dataframe(parse_api_data(model_data.get("portf_rtn", [])), False)
+                print('model portf_mkt_rtn')
+                model_portf_mkt_rtn_df = convert_to_dataframe(parse_api_data(model_data.get("portf_mkt_rtn", [])), False)
+                print('model scaled_weight')
+                model_scaled_weight_df = convert_to_weight_dataframe(parse_api_data(model_data.get("scaled_weight_df", [])))
+                print('model stats_parsed')
+                model_stats_parsed_df = convert_to_stats_dataframe(parse_api_data(model_data.get("stats_df", [])), False, False)
 
-            st.markdown("##### DL Model")
-            col1, col2 = st.columns(2)
-            with col1:
-                st.markdown("###### Cumulative Returns Comparison")
-                # st.write("Columns in DataFrame:", model_portf_mkt_rtn_df.columns)
-                # st.write(model_portf_mkt_rtn_df)
-                chart_generator.generate_cumulative_returns_chart(model_portf_mkt_rtn_df, False)
-            with col2:
-                st.markdown("###### Rolling Annual Volatility Comparison")
-                chart_generator.generate_volatility_chart(model_portf_mkt_rtn_df, False)
-
-            st.subheader("Portfolio Weights Table")
-            chart_generator.generate_weights_table(benchmark_scaled_weight_df, model_scaled_weight_df)
-
-            st.subheader("Portfolio Statistics")
-            chart_generator.generate_stats_table(benchmark_stats_parsed_df, model_stats_parsed_df)
-
-            st.subheader("Sentiment Insights")
-            col1, col2 = st.columns(2)
-
-            sentiment_df = pd.read_parquet('Sentiment_Predictions_w_Imputed_Values.parquet') #TODO
-            last_day = sentiment_df.iloc[-1:,:]
-            with col1:
-                st.markdown("###### FinBERT Sentiment Breakdown")
-                chart_generator.generate_sentiment_chart(last_day)
-            with col2:
-                st.markdown("###### Predicting Next Day’s Return")
-                chart_generator.generate_next_day_return_chart(last_day)
-
-            
-            st.divider()
-
-            stats_parsed_df = convert_to_stats_dataframe(fetch_s3_data("stats"), True, False)
-            st.subheader("Portfolio Statistics")
-            if stats_parsed_df is not None:
-                chart_generator.generate_stats_table(stats_parsed_df, None)
-            else:
-                st.write('here')
-                benchmark_stats_parsed_df = convert_to_stats_dataframe(parse_api_data(benchmark_data.get("stats_df_test", [])), False, True)
-                chart_generator.generate_stats_table(stats_parsed_df)
-
-            cum_df, vol_df = fetch_s3_data("backtest")
-            # st.write(cum_df)
-            # st.write(vol_df)
-            st.subheader("Backtest Performance")
-            if cum_df is not None and vol_df is not None:
-                # st.write(backtest_fig)
-                # st.write(cum_df)
-                # st.write(vol_df)
-                chart_generator.generate_backtest_chart(cum_df, vol_df)
-            else:
-                # temp, probs need to change bc of "calcs"
-                st.write('here 2')
-                benchmark_portf_mkt_rtn_df = convert_to_dataframe(parse_api_data(benchmark_data.get("portf_mkt_rtn_test", [])))
-                benchmark_scaled_weight_df = convert_to_weight_dataframe(parse_api_data(benchmark_data.get("scaled_weight_df_test", [])))
-                chart_generator.generate_backtest_chart(portf_rtn_df, portf_mkt_rtn_df)
-            
+                view_full.render(benchmark_portf_rtn_df, benchmark_portf_mkt_rtn_df, benchmark_stats_parsed_df, model_portf_rtn_df, model_portf_mkt_rtn_df, model_scaled_weight_df, model_stats_parsed_df)
+                st.divider()
+                view_sentiment.render(sentiment_df, last_day, 0)
+                st.divider()
+                view_backtest.render(cum_df, vol_df, stats_parsed_df)
         else:
             st.error("Could not fetch data for the selected portfolio configuration.")
 else:
-    stats_parsed_df = convert_to_stats_dataframe(fetch_s3_data("stats"), True, False)
-    st.subheader("Portfolio Statistics")
-    if stats_parsed_df is not None:
-        chart_generator.generate_stats_table(stats_parsed_df, None)
-    else:
-        st.write('here')
-        benchmark_stats_parsed_df = convert_to_stats_dataframe(parse_api_data(benchmark_data.get("stats_df_test", [])), False, True)
-        chart_generator.generate_stats_table(stats_parsed_df)
+    view_backtest.render(cum_df, vol_df, stats_parsed_df)
 
-    cum_df, vol_df = fetch_s3_data("backtest")
-    # st.write(cum_df)
-    # st.write(vol_df)
-    st.subheader("Backtest Performance")
-    if cum_df is not None and vol_df is not None:
-        # st.write(backtest_fig)
-        # st.write(cum_df)
-        # st.write(vol_df)
-        chart_generator.generate_backtest_chart(cum_df, vol_df)
-    else:
-        # temp, probs need to change bc of "calcs"
-        st.write('here 2')
-        benchmark_portf_mkt_rtn_df = convert_to_dataframe(parse_api_data(benchmark_data.get("portf_mkt_rtn_test", [])))
-        benchmark_scaled_weight_df = convert_to_weight_dataframe(parse_api_data(benchmark_data.get("scaled_weight_df_test", [])))
-        chart_generator.generate_backtest_chart(portf_rtn_df, portf_mkt_rtn_df)
 
 # Footer
 # st.markdown(f"""
