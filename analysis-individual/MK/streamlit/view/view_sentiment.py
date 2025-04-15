@@ -1,6 +1,7 @@
 import streamlit as st
 from charts import ChartGenerator
 
+
 def render(sentiment_df, last_day, loc):
     chart_generator = ChartGenerator()
 

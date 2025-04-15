@@ -1,14 +1,12 @@
 import streamlit as st
 from charts import ChartGenerator
-import pandas as pd
-import numpy as np
 
 
-def render(benchmark_portf_rtn_df, benchmark_stats_parsed_df, model_portf_rtn_df, model_portf_mkt_rtn_df, model_scaled_weight_df, model_stats_parsed_df):
+def render(benchmark_portf_rtn_df, benchmark_stats_parsed_df, model_portf_mkt_rtn_df, model_scaled_weight_df, model_stats_parsed_df):
     chart_generator = ChartGenerator()
 
     st.subheader("Optimized Portfolio Weights Treemap")
-    chart_generator.generate_pie_chart(model_scaled_weight_df)
+    chart_generator.generate_treemap(model_scaled_weight_df)
 
     with st.expander("View more details."):
         st.subheader("Portfolio Weights Table")
