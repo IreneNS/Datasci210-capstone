@@ -80,8 +80,8 @@ FOOTER_HTML = f"""
         <br>
         Developed by <strong>Deep Learning Sentiment Portfolio Capstone Team</strong> - UC Berkeley, MIDS School of Information
         <br>
-        <a href="https://your-website.com" target="_blank">Visit Project Website</a> | 
-        <a href="https://github.com/your-repo" target="_blank">GitHub</a>
+        <a href="https://sites.google.com/berkeley.edu/deeplearningsentimentportfolio/home" target="_blank">Visit Project Website</a> | 
+        <a href="https://github.com/IreneNS/Datasci210-capstone" target="_blank">GitHub</a>
     </div>
 """
 
